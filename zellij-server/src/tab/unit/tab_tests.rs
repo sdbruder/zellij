@@ -1296,6 +1296,313 @@ pub fn rejected_sized_pane_does_not_change_the_layout_and_can_be_added_after_a_c
 }
 
 #[test]
+pub fn nightmare_sized_pane_churn_keeps_rejections_and_geometry_consistent() {
+    fn add_sized_pane(
+        tab: &mut Tab,
+        pane_id: u32,
+        target_pane_id: u32,
+        direction: Direction,
+        size: SplitSize,
+        flexible: bool,
+        force: bool,
+    ) {
+        let pane_id = PaneId::Terminal(pane_id);
+        let target_pane_id = PaneId::Terminal(target_pane_id);
+        match direction {
+            Direction::Left | Direction::Right => tab.vertical_split_of_pane_id(
+                pane_id,
+                None,
+                None,
+                target_pane_id,
+                None,
+                None,
+                Some(size),
+                flexible,
+                force,
+            ),
+            Direction::Up | Direction::Down => tab.horizontal_split_of_pane_id(
+                pane_id,
+                None,
+                None,
+                target_pane_id,
+                None,
+                None,
+                Some(size),
+                flexible,
+                force,
+            ),
+        }
+        .unwrap();
+    }
+    fn add_sized_pane_without_target(
+        tab: &mut Tab,
+        pane_id: u32,
+        direction: Direction,
+        size: SplitSize,
+        flexible: bool,
+        force: bool,
+    ) {
+        tab.new_pane(
+            PaneId::Terminal(pane_id),
+            None,
+            None,
+            false,
+            true,
+            NewPanePlacement::Tiled {
+                direction: Some(direction),
+                borderless: None,
+                border_style: None,
+                size: Some(size),
+                flexible,
+                force,
+            },
+            None,
+            None,
+        )
+        .unwrap();
+    }
+    fn terminal_ids(tab: &Tab) -> Vec<u32> {
+        let mut ids: Vec<u32> = tab
+            .tiled_panes
+            .panes
+            .keys()
+            .filter_map(|pane_id| match pane_id {
+                PaneId::Terminal(id) => Some(*id),
+                _ => None,
+            })
+            .collect();
+        ids.sort_unstable();
+        ids
+    }
+    fn pane_rows(tab: &Tab, pane_id: u32) -> usize {
+        tab.tiled_panes
+            .panes
+            .get(&PaneId::Terminal(pane_id))
+            .expect("pane exists")
+            .current_geom()
+            .rows
+            .as_usize()
+    }
+    fn pane_cols(tab: &Tab, pane_id: u32) -> usize {
+        tab.tiled_panes
+            .panes
+            .get(&PaneId::Terminal(pane_id))
+            .expect("pane exists")
+            .current_geom()
+            .cols
+            .as_usize()
+    }
+
+    let mut tab = create_new_tab(
+        Size {
+            cols: 121,
+            rows: 20,
+        },
+        true,
+    );
+    add_sized_pane_without_target(
+        &mut tab,
+        2,
+        Direction::Down,
+        SplitSize::Fixed(5),
+        false,
+        false,
+    );
+    add_sized_pane_without_target(
+        &mut tab,
+        3,
+        Direction::Right,
+        SplitSize::Fixed(10),
+        false,
+        false,
+    );
+    add_sized_pane_without_target(
+        &mut tab,
+        4,
+        Direction::Down,
+        SplitSize::Fixed(8),
+        false,
+        false,
+    );
+    assert_eq!(terminal_ids(&tab), vec![1, 2, 3, 4]);
+
+    // The remaining space in pane 1 is too small to split, with or without force.
+    add_sized_pane(
+        &mut tab,
+        5,
+        1,
+        Direction::Down,
+        SplitSize::Fixed(5),
+        false,
+        false,
+    );
+    assert!(!tab.tiled_panes.panes_contain(&PaneId::Terminal(5)));
+    add_sized_pane(
+        &mut tab,
+        5,
+        1,
+        Direction::Down,
+        SplitSize::Fixed(5),
+        false,
+        true,
+    );
+    assert!(!tab.tiled_panes.panes_contain(&PaneId::Terminal(5)));
+    assert_eq!(terminal_ids(&tab), vec![1, 2, 3, 4]);
+
+    // Closing a pane gives the space back to the surviving layout.
+    tab.close_pane(PaneId::Terminal(2), false, None);
+    assert_eq!(terminal_ids(&tab), vec![1, 3, 4]);
+    add_sized_pane(
+        &mut tab,
+        5,
+        1,
+        Direction::Down,
+        SplitSize::Fixed(8),
+        false,
+        true,
+    );
+    assert_eq!(terminal_ids(&tab), vec![1, 3, 4, 5]);
+    add_sized_pane(
+        &mut tab,
+        6,
+        5,
+        Direction::Right,
+        SplitSize::Fixed(20),
+        false,
+        false,
+    );
+    assert_eq!(terminal_ids(&tab), vec![1, 3, 4, 5, 6]);
+
+    // Rejection leaves pane 5 untouched, and force cannot override a pane
+    // that has fewer than two minimum-sized halves.
+    let pane_5_rows_before_rejection = pane_rows(&tab, 5);
+    add_sized_pane(
+        &mut tab,
+        7,
+        5,
+        Direction::Down,
+        SplitSize::Fixed(5),
+        false,
+        false,
+    );
+    add_sized_pane(
+        &mut tab,
+        7,
+        5,
+        Direction::Down,
+        SplitSize::Fixed(5),
+        false,
+        true,
+    );
+    assert!(!tab.tiled_panes.panes_contain(&PaneId::Terminal(7)));
+    assert_eq!(terminal_ids(&tab), vec![1, 3, 4, 5, 6]);
+    assert_eq!(pane_rows(&tab, 5), pane_5_rows_before_rejection);
+
+    tab.close_pane(PaneId::Terminal(4), false, None);
+    add_sized_pane(
+        &mut tab,
+        7,
+        1,
+        Direction::Down,
+        SplitSize::Fixed(5),
+        false,
+        false,
+    );
+    assert_eq!(terminal_ids(&tab), vec![1, 3, 5, 6, 7]);
+
+    tab.resize_whole_tab(Size {
+        cols: 160,
+        rows: 40,
+    })
+    .unwrap();
+    let pane_1_cols = pane_cols(&tab, 1);
+    add_sized_pane(
+        &mut tab,
+        8,
+        1,
+        Direction::Right,
+        SplitSize::Percent(25),
+        false,
+        false,
+    );
+    let pane_8_cols = pane_cols(&tab, 8);
+    assert!(pane_8_cols > 0);
+    assert!(pane_8_cols < pane_1_cols);
+    let pane_8_geom = tab
+        .tiled_panes
+        .panes
+        .get(&PaneId::Terminal(8))
+        .unwrap()
+        .current_geom();
+    assert!(matches!(
+        pane_8_geom.cols.constraint,
+        Constraint::Percent(_)
+    ));
+
+    // A number that cannot fit is still rejected; force shrinks it to the
+    // largest size that leaves the target at the minimum.
+    add_sized_pane(
+        &mut tab,
+        9,
+        1,
+        Direction::Down,
+        SplitSize::Fixed(1000),
+        false,
+        false,
+    );
+    assert!(!tab.tiled_panes.panes_contain(&PaneId::Terminal(9)));
+    add_sized_pane(
+        &mut tab,
+        9,
+        1,
+        Direction::Down,
+        SplitSize::Fixed(1000),
+        false,
+        true,
+    );
+    assert!(tab.tiled_panes.panes_contain(&PaneId::Terminal(9)));
+    assert_eq!(pane_rows(&tab, 1), 5);
+
+    tab.close_pane(PaneId::Terminal(7), false, None);
+    add_sized_pane(
+        &mut tab,
+        10,
+        1,
+        Direction::Down,
+        SplitSize::Fixed(5),
+        false,
+        false,
+    );
+    assert!(tab.tiled_panes.panes_contain(&PaneId::Terminal(10)));
+
+    add_sized_pane(
+        &mut tab,
+        11,
+        1,
+        Direction::Down,
+        SplitSize::Fixed(5),
+        false,
+        false,
+    );
+    add_sized_pane(
+        &mut tab,
+        11,
+        1,
+        Direction::Down,
+        SplitSize::Fixed(5),
+        false,
+        true,
+    );
+    assert!(!tab.tiled_panes.panes_contain(&PaneId::Terminal(11)));
+
+    assert_eq!(terminal_ids(&tab), vec![1, 3, 5, 6, 8, 9, 10]);
+    for pane_id in terminal_ids(&tab) {
+        assert!(pane_rows(&tab, pane_id) > 0);
+        assert!(pane_cols(&tab, pane_id) > 0);
+    }
+}
+
+#[test]
 pub fn forced_size_still_cannot_split_a_pane_without_minimum_room() {
     let size = Size { cols: 8, rows: 4 };
     let mut tab = create_new_tab(size, true);
