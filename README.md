@@ -37,6 +37,13 @@
   <sub><a href="https://serpapi.com/?utm_source=zellij">SerpApi</a> is the world's leading provider of search data, pioneering APIs that turn search engine results into structured, developer-ready information.</sub>
 </p>
 
+> **Fork note:** This fork exists to carry the initial-size option for tiled
+> panes in `zellij action new-pane`
+> ([zellij-org/zellij#5984](https://github.com/zellij-org/zellij/issues/5984)).
+> The implementation lives on the
+> [`feat/5984-new-pane-sizing`](https://github.com/sdbruder/zellij/tree/feat/5984-new-pane-sizing)
+> branch and is used by a harness that opens each sub-task in its own pane.
+
 # What is this?
 
 [Zellij](#origin-of-the-name) is a workspace aimed at developers, ops-oriented people and anyone who loves the terminal. Similar programs are sometimes called "Terminal Multiplexers".
