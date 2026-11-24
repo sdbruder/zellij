@@ -488,6 +488,8 @@ fn control_payload_to_server_msg(
                     borderless: None,
                     tab_id: None,
                     border_style: None,
+                    size: None,
+                    flexible: false,
                 },
                 terminal_id: None,
                 client_id: None,

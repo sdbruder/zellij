@@ -3,7 +3,7 @@ use crate::input::actions::{Action, RunCommandAction};
 use crate::input::config::{ConversionError, KdlError};
 use crate::input::keybinds::Keybinds;
 use crate::input::layout::{
-    Layout, PercentOrFixed, Run, RunPlugin, RunPluginLocation, RunPluginOrAlias,
+    Layout, PercentOrFixed, Run, RunPlugin, RunPluginLocation, RunPluginOrAlias, SplitSize,
 };
 pub use crate::input::options::PaneFrameStyle;
 use crate::pane_size::PaneGeom;
@@ -4890,6 +4890,10 @@ pub enum NewPanePlacement {
         direction: Option<Direction>,
         borderless: Option<bool>,
         border_style: Option<BorderStyleOverride>,
+        #[serde(default)]
+        size: Option<SplitSize>,
+        #[serde(default)]
+        flexible: bool,
     },
     Floating(Option<FloatingPaneCoordinates>),
     InPlace {
@@ -5009,11 +5013,15 @@ impl NewPanePlacement {
             NewPanePlacement::Tiled {
                 direction,
                 borderless,
+                size,
+                flexible,
                 ..
             } => NewPanePlacement::Tiled {
                 direction,
                 borderless,
                 border_style,
+                size,
+                flexible,
             },
             NewPanePlacement::Floating(coords) => NewPanePlacement::Floating(Some(
                 coords.unwrap_or_default().with_border_style(border_style),
@@ -6254,6 +6262,8 @@ fn new_pane_placement_carries_a_border_style() {
         direction: None,
         borderless: None,
         border_style: None,
+        size: None,
+        flexible: false,
     }
     .with_border_style(Some(BorderStyleOverride {
         all: Some(LineStyle::Heavy),

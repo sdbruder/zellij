@@ -2523,6 +2523,8 @@ fn open_terminal(env: &PluginEnv, cwd: PathBuf, border_style: Option<BorderStyle
         borderless: None,
         border_style,
         tab_id: None,
+        size: None,
+        flexible: false,
     };
     let result = apply_action!(action, error_msg, env);
 
@@ -2561,6 +2563,8 @@ fn open_terminal_near_plugin(
             direction: None,
             borderless: None,
             border_style,
+            size: None,
+            flexible: false,
         },
         false,
         ClientTabIndexOrPaneId::PaneId(PaneId::Plugin(self_pane_id(env))),
@@ -2982,6 +2986,8 @@ fn open_command_pane(
         borderless: None,
         border_style,
         tab_id: None,
+        size: None,
+        flexible: false,
     };
     let result = apply_action!(action, error_msg, env);
 
@@ -3038,6 +3044,8 @@ fn open_command_pane_near_plugin(
             direction: None,
             borderless: None,
             border_style,
+            size: None,
+            flexible: false,
         },
         false,
         ClientTabIndexOrPaneId::PaneId(PaneId::Plugin(self_pane_id(env))),
@@ -3986,6 +3994,8 @@ fn new_tiled_pane_in_tab(env: &PluginEnv, tab_position: usize) {
         borderless: None,
         border_style: None,
         tab_id: Some(tab_position),
+        size: None,
+        flexible: false,
     };
     let result = apply_action!(action, error_msg, env);
 

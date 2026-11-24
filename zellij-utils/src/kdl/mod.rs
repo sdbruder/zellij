@@ -2498,6 +2498,8 @@ impl TryFrom<(&KdlNode, &Options)> for Action {
                         borderless: None,
                         border_style,
                         tab_id: None,
+                        size: None,
+                        flexible: false,
                     })
                 }
             },

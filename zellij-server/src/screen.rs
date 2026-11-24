@@ -11283,6 +11283,8 @@ pub(crate) fn screen_thread_main(
                                         direction: Some(direction),
                                         borderless,
                                         border_style: None,
+                                        size,
+                                        flexible,
                                     } => {
                                         if direction == Direction::Left
                                             || direction == Direction::Right
@@ -11294,6 +11296,8 @@ pub(crate) fn screen_thread_main(
                                                 pane_id,
                                                 blocking_notification.take(),
                                                 borderless,
+                                                size,
+                                                flexible,
                                             )?;
                                         } else {
                                             tab.horizontal_split_of_pane_id(
@@ -11303,6 +11307,8 @@ pub(crate) fn screen_thread_main(
                                                 pane_id,
                                                 blocking_notification.take(),
                                                 borderless,
+                                                size,
+                                                flexible,
                                             )?;
                                         }
                                     },
@@ -14046,6 +14052,8 @@ pub(crate) fn screen_thread_main(
                         direction: None,
                         borderless: None,
                         border_style: None,
+                        size: None,
+                        flexible: false,
                     };
                 }
                 if should_be_in_place {

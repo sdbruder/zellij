@@ -2646,6 +2646,8 @@ fn group_panes_following_focus() {
                         direction: None,
                         borderless: None,
                         border_style: None,
+                        size: None,
+                        flexible: false,
                     },
                     Some(client_id),
                     None,
@@ -2708,6 +2710,8 @@ fn break_group_with_mouse() {
                         direction: None,
                         borderless: None,
                         border_style: None,
+                        size: None,
+                        flexible: false,
                     },
                     Some(client_id),
                     None,
@@ -3805,6 +3809,8 @@ pub fn send_cli_new_pane_action_with_default_parameters() {
         tab_id: None,
         border_style: None,
         notify: Default::default(),
+        size: None,
+        flexible: false,
     };
     send_cli_action_to_server(&session_metadata, cli_new_pane_action, client_id);
     std::thread::sleep(std::time::Duration::from_millis(100)); // give time for actions to be
@@ -3841,6 +3847,8 @@ pub fn web_new_pane_in_tab_action_targets_requested_tab() {
         borderless: None,
         tab_id: Some(0),
         border_style: None,
+        size: None,
+        flexible: false,
     };
     route_arbitrary_action_to_server(&session_metadata, action, client_id);
     std::thread::sleep(std::time::Duration::from_millis(100));
@@ -3918,6 +3926,8 @@ pub fn send_cli_new_pane_action_with_split_direction() {
         tab_id: None,
         border_style: None,
         notify: Default::default(),
+        size: None,
+        flexible: false,
     };
     send_cli_action_to_server(&session_metadata, cli_new_pane_action, client_id);
     std::thread::sleep(std::time::Duration::from_millis(100)); // give time for actions to be
@@ -3976,6 +3986,8 @@ pub fn send_cli_new_pane_action_with_command_and_cwd() {
         tab_id: None,
         border_style: None,
         notify: Default::default(),
+        size: None,
+        flexible: false,
     };
     send_cli_action_to_server(&session_metadata, cli_new_pane_action, client_id);
     std::thread::sleep(std::time::Duration::from_millis(100)); // give time for actions to be
@@ -4042,6 +4054,8 @@ pub fn send_cli_new_pane_action_with_cwd_and_no_command() {
         tab_id: None,
         border_style: None,
         notify: Default::default(),
+        size: None,
+        flexible: false,
     };
     send_cli_action_to_server(&session_metadata, cli_new_pane_action, client_id);
     std::thread::sleep(std::time::Duration::from_millis(100)); // give time for actions to be
@@ -4118,6 +4132,8 @@ pub fn send_cli_new_pane_action_with_floating_pane_and_coordinates() {
         tab_id: None,
         border_style: None,
         notify: Default::default(),
+        size: None,
+        flexible: false,
     };
     send_cli_action_to_server(&session_metadata, cli_new_pane_action, client_id);
     std::thread::sleep(std::time::Duration::from_millis(100)); // give time for actions to be
@@ -6061,6 +6077,8 @@ pub fn send_cli_new_pane_in_place_with_close_replaced_pane() {
         tab_id: None,
         border_style: None,
         notify: Default::default(),
+        size: None,
+        flexible: false,
     };
     send_cli_action_to_server(&session_metadata, cli_action, client_id);
     std::thread::sleep(std::time::Duration::from_millis(100));
@@ -8928,6 +8946,8 @@ pub fn send_cli_new_pane_action_with_tab_id() {
         tab_id: Some(0),
         border_style: None,
         notify: Default::default(),
+        size: None,
+        flexible: false,
     };
     send_cli_action_to_server(&session_metadata, cli_new_pane_action, client_id);
     std::thread::sleep(std::time::Duration::from_millis(100));
@@ -8993,6 +9013,8 @@ pub fn send_cli_new_floating_pane_action_with_tab_id() {
         tab_id: Some(0),
         border_style: None,
         notify: Default::default(),
+        size: None,
+        flexible: false,
     };
     send_cli_action_to_server(&session_metadata, cli_new_pane_action, client_id);
     std::thread::sleep(std::time::Duration::from_millis(100));
@@ -9108,6 +9130,8 @@ pub fn send_cli_new_pane_action_with_tab_id_and_direction() {
         tab_id: Some(0),
         border_style: None,
         notify: Default::default(),
+        size: None,
+        flexible: false,
     };
     send_cli_action_to_server(&session_metadata, cli_new_pane_action, client_id);
     std::thread::sleep(std::time::Duration::from_millis(100));
@@ -9172,6 +9196,8 @@ pub fn send_cli_new_pane_action_with_tab_id_and_stacked() {
         tab_id: Some(0),
         border_style: None,
         notify: Default::default(),
+        size: None,
+        flexible: false,
     };
     send_cli_action_to_server(&session_metadata, cli_new_pane_action, client_id);
     std::thread::sleep(std::time::Duration::from_millis(100));
@@ -10405,6 +10431,8 @@ fn a_plugin_behind_a_fullscreen_pane_is_told_it_is_hidden() {
             direction: None,
             borderless: None,
             border_style: None,
+            size: None,
+            flexible: false,
         },
         Some(1),
         None,

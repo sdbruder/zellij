@@ -82,8 +82,8 @@ use zellij_utils::{
     input::{
         command::TerminalAction,
         layout::{
-            FloatingPaneLayout, Run, RunPluginOrAlias, SplitDirection, SwapFloatingLayout,
-            SwapTiledLayout, TiledPaneLayout,
+            FloatingPaneLayout, Run, RunPluginOrAlias, SplitDirection, SplitSize,
+            SwapFloatingLayout, SwapTiledLayout, TiledPaneLayout,
         },
         options::PaneFrameStyle,
         parse_keys,
@@ -3325,41 +3325,66 @@ impl Tab {
             NewPanePlacement::Tiled {
                 direction: None,
                 borderless,
+                size,
                 ..
-            } => self.new_tiled_pane(
-                pid,
-                initial_pane_title,
-                invoked_with,
-                start_suppressed,
-                should_focus_pane,
-                client_id,
-                blocking_notification,
-                borderless,
-            ),
+            } => {
+                if size.is_some() {
+                    log::error!("Tiled pane size requires a direction");
+                }
+                self.new_tiled_pane(
+                    pid,
+                    initial_pane_title,
+                    invoked_with,
+                    start_suppressed,
+                    should_focus_pane,
+                    client_id,
+                    blocking_notification,
+                    borderless,
+                )
+            },
             NewPanePlacement::Tiled {
                 direction: Some(direction),
                 borderless,
+                size,
+                flexible,
                 ..
             } => {
                 let is_vertical = direction == Direction::Left || direction == Direction::Right;
                 let focused_client_id = client_id.filter(|_| should_focus_pane);
                 match focused_client_id {
                     Some(client_id) => {
-                        if is_vertical {
-                            self.vertical_split(
-                                pid,
-                                initial_pane_title,
-                                client_id,
-                                blocking_notification,
-                                borderless,
-                            )?;
+                        if size.is_none() && !flexible {
+                            if is_vertical {
+                                self.vertical_split(
+                                    pid,
+                                    initial_pane_title,
+                                    client_id,
+                                    blocking_notification,
+                                    borderless,
+                                )?;
+                            } else {
+                                self.horizontal_split(
+                                    pid,
+                                    initial_pane_title,
+                                    client_id,
+                                    blocking_notification,
+                                    borderless,
+                                )?;
+                            }
                         } else {
-                            self.horizontal_split(
+                            self.split_active_pane(
                                 pid,
                                 initial_pane_title,
                                 client_id,
                                 blocking_notification,
                                 borderless,
+                                if is_vertical {
+                                    SplitDirection::Vertical
+                                } else {
+                                    SplitDirection::Horizontal
+                                },
+                                size,
+                                flexible,
                             )?;
                         }
                     },
@@ -3376,6 +3401,8 @@ impl Tab {
                                     target_pane_id,
                                     blocking_notification,
                                     borderless,
+                                    size,
+                                    flexible,
                                 )?;
                             },
                             Some(target_pane_id) => {
@@ -3386,6 +3413,8 @@ impl Tab {
                                     target_pane_id,
                                     blocking_notification,
                                     borderless,
+                                    size,
+                                    flexible,
                                 )?;
                             },
                             None => {
@@ -4376,90 +4405,16 @@ impl Tab {
         completion_tx: Option<NotificationEnd>,
         borderless: Option<bool>,
     ) -> Result<()> {
-        let err_context =
-            || format!("failed to split pane {pid:?} horizontally for client {client_id}");
-        if self.floating_panes.panes_are_visible() {
-            self.close_unplaced_pane_id(
-                pid,
-                completion_tx,
-                Some(client_id),
-                PaneNotCreatedReason::FloatingPanesVisible,
-            );
-            return Ok(());
-        }
-        self.close_down_to_max_terminals()
-            .with_context(err_context)
-            .non_fatal();
-        if self.tiled_panes.fullscreen_is_active() {
-            self.unset_fullscreen();
-        }
-        self.dissolve_stack_lists_for_classic_mutation();
-        if self.tiled_panes.can_split_pane_horizontally(client_id) {
-            if let PaneId::Terminal(term_pid) = pid {
-                let next_terminal_position = self.get_next_terminal_position();
-                let mut new_terminal = TerminalPane::new(
-                    term_pid,
-                    PaneGeom::default(), // the initial size will be set later
-                    self.style,
-                    next_terminal_position,
-                    String::new(),
-                    self.link_handler.clone(),
-                    self.character_cell_size.clone(),
-                    self.sixel_image_store.clone(),
-                    self.kitty_image_store.clone(),
-                    self.terminal_emulator_colors.clone(),
-                    self.terminal_emulator_color_codes.clone(),
-                    initial_pane_title,
-                    None,
-                    self.debug,
-                    self.arrow_fonts,
-                    self.styled_underlines,
-                    self.osc8_hyperlinks,
-                    self.explicitly_disable_kitty_keyboard_protocol,
-                    completion_tx,
-                )
-                .with_grapheme_clusters(self.grapheme_clusters);
-                if let Some(supported) = self.kitty_host_support {
-                    new_terminal.update_kitty_host_support(supported);
-                }
-                if let Some(supported) = self.sixel_host_support {
-                    new_terminal.update_sixel_host_support(supported);
-                }
-                if let Some(borderless) = borderless {
-                    new_terminal.set_borderless(borderless);
-                }
-                if let Some(new_terminal) =
-                    self.tiled_panes
-                        .split_pane_horizontally(pid, Box::new(new_terminal), client_id)
-                {
-                    self.close_unplaced_pane(
-                        new_terminal,
-                        Some(client_id),
-                        PaneNotCreatedReason::NoRoom,
-                    );
-                    return Ok(());
-                }
-                self.set_should_clear_display_before_rendering();
-                self.tiled_panes.focus_pane(pid, client_id);
-                self.swap_layouts.set_is_tiled_damaged();
-            } else {
-                self.close_unplaced_pane_id(
-                    pid,
-                    completion_tx,
-                    Some(client_id),
-                    PaneNotCreatedReason::SplitNotSupportedForPluginPanes,
-                );
-            }
-        } else {
-            log::error!("No room to split pane horizontally");
-            self.close_unplaced_pane_id(
-                pid,
-                completion_tx,
-                Some(client_id),
-                PaneNotCreatedReason::NoRoom,
-            );
-        }
-        Ok(())
+        self.split_active_pane(
+            pid,
+            initial_pane_title,
+            client_id,
+            completion_tx,
+            borderless,
+            SplitDirection::Horizontal,
+            None,
+            false,
+        )
     }
     pub fn vertical_split(
         &mut self,
@@ -4469,8 +4424,35 @@ impl Tab {
         completion_tx: Option<NotificationEnd>,
         borderless: Option<bool>,
     ) -> Result<()> {
-        let err_context =
-            || format!("failed to split pane {pid:?} vertically for client {client_id}");
+        self.split_active_pane(
+            pid,
+            initial_pane_title,
+            client_id,
+            completion_tx,
+            borderless,
+            SplitDirection::Vertical,
+            None,
+            false,
+        )
+    }
+    fn split_active_pane(
+        &mut self,
+        pid: PaneId,
+        initial_pane_title: Option<String>,
+        client_id: ClientId,
+        completion_tx: Option<NotificationEnd>,
+        borderless: Option<bool>,
+        split_direction: SplitDirection,
+        size: Option<SplitSize>,
+        flexible: bool,
+    ) -> Result<()> {
+        let split_direction_text = match split_direction {
+            SplitDirection::Horizontal => "horizontally",
+            SplitDirection::Vertical => "vertically",
+        };
+        let err_context = || {
+            format!("failed to split pane {pid:?} {split_direction_text} for client {client_id}")
+        };
         if self.floating_panes.panes_are_visible() {
             self.close_unplaced_pane_id(
                 pid,
@@ -4487,7 +4469,11 @@ impl Tab {
             self.unset_fullscreen();
         }
         self.dissolve_stack_lists_for_classic_mutation();
-        if self.tiled_panes.can_split_pane_vertically(client_id) {
+        let can_split = match split_direction {
+            SplitDirection::Horizontal => self.tiled_panes.can_split_pane_horizontally(client_id),
+            SplitDirection::Vertical => self.tiled_panes.can_split_pane_vertically(client_id),
+        };
+        if can_split {
             if let PaneId::Terminal(term_pid) = pid {
                 let next_terminal_position = self.get_next_terminal_position();
                 let mut new_terminal = TerminalPane::new(
@@ -4521,10 +4507,23 @@ impl Tab {
                 if let Some(borderless) = borderless {
                     new_terminal.set_borderless(borderless);
                 }
-                if let Some(new_terminal) =
-                    self.tiled_panes
-                        .split_pane_vertically(pid, Box::new(new_terminal), client_id)
-                {
+                let split_result = match split_direction {
+                    SplitDirection::Horizontal => self.tiled_panes.split_pane_horizontally(
+                        pid,
+                        Box::new(new_terminal),
+                        client_id,
+                        size,
+                        flexible,
+                    ),
+                    SplitDirection::Vertical => self.tiled_panes.split_pane_vertically(
+                        pid,
+                        Box::new(new_terminal),
+                        client_id,
+                        size,
+                        flexible,
+                    ),
+                };
+                if let Some(new_terminal) = split_result {
                     self.close_unplaced_pane(
                         new_terminal,
                         Some(client_id),
@@ -4544,7 +4543,7 @@ impl Tab {
                 );
             }
         } else {
-            log::error!("No room to split pane vertically");
+            log::error!("No room to split pane {}", split_direction_text);
             self.close_unplaced_pane_id(
                 pid,
                 completion_tx,
@@ -4554,7 +4553,6 @@ impl Tab {
         }
         Ok(())
     }
-
     pub fn horizontal_split_of_pane_id(
         &mut self,
         pid: PaneId,
@@ -4563,6 +4561,8 @@ impl Tab {
         target_pane_id: PaneId,
         completion_tx: Option<NotificationEnd>,
         borderless: Option<bool>,
+        size: Option<SplitSize>,
+        flexible: bool,
     ) -> Result<()> {
         self.split_of_pane_id(
             pid,
@@ -4572,6 +4572,8 @@ impl Tab {
             SplitDirection::Horizontal,
             completion_tx,
             borderless,
+            size,
+            flexible,
         )
     }
     pub fn vertical_split_of_pane_id(
@@ -4582,6 +4584,8 @@ impl Tab {
         target_pane_id: PaneId,
         completion_tx: Option<NotificationEnd>,
         borderless: Option<bool>,
+        size: Option<SplitSize>,
+        flexible: bool,
     ) -> Result<()> {
         self.split_of_pane_id(
             pid,
@@ -4591,6 +4595,8 @@ impl Tab {
             SplitDirection::Vertical,
             completion_tx,
             borderless,
+            size,
+            flexible,
         )
     }
     fn split_of_pane_id(
@@ -4602,6 +4608,8 @@ impl Tab {
         split_direction: SplitDirection,
         completion_tx: Option<NotificationEnd>,
         borderless: Option<bool>,
+        size: Option<SplitSize>,
+        flexible: bool,
     ) -> Result<()> {
         let err_context =
             || format!("failed to split pane {target_pane_id:?} without changing focus");
@@ -4680,11 +4688,15 @@ impl Tab {
                     pid,
                     Box::new(new_terminal),
                     target_pane_id,
+                    size,
+                    flexible,
                 ),
                 SplitDirection::Vertical => self.tiled_panes.split_pane_id_vertically(
                     pid,
                     Box::new(new_terminal),
                     target_pane_id,
+                    size,
+                    flexible,
                 ),
             };
             if let Some(unplaced_pane) = unplaced_pane {

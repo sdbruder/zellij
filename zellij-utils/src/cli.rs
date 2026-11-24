@@ -1549,12 +1549,18 @@ pub enum CliAction {
         /// The y coordinates if the pane is floating as a bare integer (eg. 1) or percent (eg. 10%)
         #[clap(short, long, requires("floating"))]
         y: Option<String>,
-        /// The width if the pane is floating as a bare integer (eg. 1) or percent (eg. 10%)
-        #[clap(long, requires("floating"))]
+        /// The width of the pane as a bare integer (eg. 1) or percent (eg. 10%). Floating sizes are relative to the viewport, tiled sizes require --direction and are relative to the space being split
+        #[clap(long)]
         width: Option<String>,
-        /// The height if the pane is floating as a bare integer (eg. 1) or percent (eg. 10%)
-        #[clap(long, requires("floating"))]
+        /// The height of the pane as a bare integer (eg. 1) or percent (eg. 10%). Floating sizes are relative to the viewport, tiled sizes require --direction and are relative to the space being split
+        #[clap(long)]
         height: Option<String>,
+        /// The size of a new tiled pane on the split axis as a bare integer (eg. 30) or percent (eg. 30%). Requires --direction
+        #[clap(long, conflicts_with_all = &["width", "height", "floating", "stacked", "in_place", "plugin"])]
+        size: Option<String>,
+        /// Treat a tiled pane size in cells as an initial size only, so the pane stays flexible on later resizes. Percent sizes are always flexible
+        #[clap(long)]
+        flexible: bool,
         /// Whether to pin a floating pane so that it is always on top
         #[clap(long, requires("floating"))]
         pinned: Option<bool>,

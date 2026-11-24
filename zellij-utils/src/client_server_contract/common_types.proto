@@ -580,6 +580,8 @@ message NewTiledPaneAction {
   optional uint32 tab_id = 9;
   bool no_focus = 10;
   optional BorderStyleOverride border_style = 11;
+  optional SplitSize size = 12;
+  bool flexible = 13;
 }
 
 message NewInPlacePaneAction {
@@ -1003,6 +1005,8 @@ message TiledPlacement {
   optional Direction direction = 1;
   optional bool borderless = 2;
   optional BorderStyleOverride border_style = 3;
+  optional SplitSize size = 4;
+  bool flexible = 5;
 }
 
 message StackedPlacement {

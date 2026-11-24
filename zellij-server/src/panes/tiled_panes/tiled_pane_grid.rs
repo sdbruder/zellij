@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 use zellij_utils::data::{Direction, Resize, ResizeStrategy};
 use zellij_utils::{
     errors::prelude::*,
-    input::layout::SplitDirection,
+    input::layout::{SplitDirection, SplitSize},
     pane_size::{Dimension, PaneGeom, Size, Viewport},
 };
 
@@ -2351,5 +2351,194 @@ pub fn split(direction: SplitDirection, rect: &PaneGeom) -> Option<(PaneGeom, Pa
         Some((first_rect, second_rect))
     } else {
         None
+    }
+}
+
+pub fn split_with_size(
+    direction: SplitDirection,
+    rect: &PaneGeom,
+    size: SplitSize,
+    flexible: bool,
+) -> Option<(PaneGeom, PaneGeom)> {
+    let space = match direction {
+        SplitDirection::Vertical => rect.cols,
+        SplitDirection::Horizontal => rect.rows,
+    };
+    let parent_percent = space.as_percent()?;
+    let parent_cells = space.as_usize();
+    let new_cells = match size {
+        SplitSize::Percent(percent) => {
+            ((percent as f64 / 100.0) * parent_cells as f64).floor() as usize
+        },
+        SplitSize::Fixed(fixed) => fixed,
+    };
+    let target_cells = parent_cells.saturating_sub(new_cells);
+    let min_size = match direction {
+        SplitDirection::Vertical => MIN_TERMINAL_WIDTH,
+        SplitDirection::Horizontal => MIN_TERMINAL_HEIGHT,
+    };
+    if new_cells < min_size || target_cells < min_size {
+        return None;
+    }
+    let new_percent = match size {
+        SplitSize::Percent(percent) => parent_percent * percent as f64 / 100.0,
+        SplitSize::Fixed(fixed) => parent_percent * fixed as f64 / parent_cells as f64,
+    };
+    let new_dimension = match (size, flexible) {
+        (SplitSize::Fixed(fixed), false) => Dimension::fixed(fixed),
+        _ => {
+            let mut dimension = Dimension::percent(new_percent);
+            dimension.set_inner(new_cells);
+            dimension
+        },
+    };
+    let mut target_dimension = Dimension::percent(parent_percent - new_percent);
+    target_dimension.set_inner(target_cells);
+    let first_rect = match direction {
+        SplitDirection::Vertical => PaneGeom {
+            cols: target_dimension,
+            ..*rect
+        },
+        SplitDirection::Horizontal => PaneGeom {
+            rows: target_dimension,
+            ..*rect
+        },
+    };
+    let second_rect = match direction {
+        SplitDirection::Vertical => PaneGeom {
+            x: first_rect.x + 1,
+            cols: new_dimension,
+            logical_position: None,
+            ..*rect
+        },
+        SplitDirection::Horizontal => PaneGeom {
+            y: first_rect.y + 1,
+            rows: new_dimension,
+            logical_position: None,
+            ..*rect
+        },
+    };
+    Some((first_rect, second_rect))
+}
+
+#[cfg(test)]
+mod split_with_size_tests {
+    use super::*;
+    use zellij_utils::pane_size::Constraint;
+
+    fn rect_with_percent_space(
+        cols: usize,
+        rows: usize,
+        cols_percent: f64,
+        rows_percent: f64,
+    ) -> PaneGeom {
+        let mut cols_dimension = Dimension::percent(cols_percent);
+        cols_dimension.set_inner(cols);
+        let mut rows_dimension = Dimension::percent(rows_percent);
+        rows_dimension.set_inner(rows);
+        PaneGeom {
+            cols: cols_dimension,
+            rows: rows_dimension,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn percent_size_splits_vertical_space() {
+        let rect = rect_with_percent_space(100, 20, 100.0, 100.0);
+        let (target, new_pane) = split_with_size(
+            SplitDirection::Vertical,
+            &rect,
+            SplitSize::Percent(30),
+            false,
+        )
+        .expect("expected a split");
+        assert_eq!(target.cols.as_usize(), 70);
+        assert_eq!(target.cols.constraint, Constraint::Percent(70.0));
+        assert_eq!(new_pane.cols.as_usize(), 30);
+        assert_eq!(new_pane.cols.constraint, Constraint::Percent(30.0));
+    }
+
+    #[test]
+    fn fixed_size_without_flexible_creates_a_fixed_pane() {
+        let rect = rect_with_percent_space(20, 40, 100.0, 100.0);
+        let (target, new_pane) = split_with_size(
+            SplitDirection::Horizontal,
+            &rect,
+            SplitSize::Fixed(10),
+            false,
+        )
+        .expect("expected a split");
+        assert_eq!(target.rows.as_usize(), 30);
+        assert_eq!(target.rows.constraint, Constraint::Percent(75.0));
+        assert_eq!(new_pane.rows.as_usize(), 10);
+        assert_eq!(new_pane.rows.constraint, Constraint::Fixed(10));
+    }
+
+    #[test]
+    fn fixed_size_with_flexible_creates_a_percent_pane() {
+        let rect = rect_with_percent_space(20, 40, 100.0, 100.0);
+        let (target, new_pane) = split_with_size(
+            SplitDirection::Horizontal,
+            &rect,
+            SplitSize::Fixed(10),
+            true,
+        )
+        .expect("expected a split");
+        assert_eq!(target.rows.as_usize(), 30);
+        assert_eq!(target.rows.constraint, Constraint::Percent(75.0));
+        assert_eq!(new_pane.rows.as_usize(), 10);
+        assert_eq!(new_pane.rows.constraint, Constraint::Percent(25.0));
+    }
+
+    #[test]
+    fn percent_size_is_relative_to_the_target_pane_space() {
+        let rect = rect_with_percent_space(20, 20, 100.0, 50.0);
+        let (target, new_pane) = split_with_size(
+            SplitDirection::Horizontal,
+            &rect,
+            SplitSize::Percent(30),
+            false,
+        )
+        .expect("expected a split");
+        assert_eq!(new_pane.rows.as_usize(), 6);
+        assert_eq!(new_pane.rows.constraint, Constraint::Percent(15.0));
+        assert_eq!(target.rows.as_usize(), 14);
+        assert_eq!(target.rows.constraint, Constraint::Percent(35.0));
+    }
+
+    #[test]
+    fn sizes_below_the_minimum_are_rejected() {
+        let rect = rect_with_percent_space(20, 40, 100.0, 100.0);
+        assert!(split_with_size(
+            SplitDirection::Horizontal,
+            &rect,
+            SplitSize::Percent(5),
+            false
+        )
+        .is_none());
+        assert!(split_with_size(
+            SplitDirection::Horizontal,
+            &rect,
+            SplitSize::Fixed(38),
+            false
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn fixed_parent_space_is_rejected() {
+        let rect = PaneGeom {
+            rows: Dimension::fixed(40),
+            cols: Dimension::percent(100.0),
+            ..Default::default()
+        };
+        assert!(split_with_size(
+            SplitDirection::Horizontal,
+            &rect,
+            SplitSize::Fixed(10),
+            false
+        )
+        .is_none());
     }
 }

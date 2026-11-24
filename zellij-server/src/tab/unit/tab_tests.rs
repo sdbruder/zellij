@@ -21,7 +21,7 @@ use zellij_utils::errors::ErrorContext;
 use zellij_utils::input::layout::{SplitDirection, SplitSize, TiledPaneLayout};
 use zellij_utils::input::options::{PaneFrameStyle, StackListOrientation};
 use zellij_utils::ipc::IpcReceiverWithContext;
-use zellij_utils::pane_size::{PaneGeom, Size, SizeInPixels};
+use zellij_utils::pane_size::{Constraint, PaneGeom, Size, SizeInPixels};
 use zellij_utils::position::Position;
 
 use crate::os_input_output::AsyncReader;
@@ -981,6 +981,8 @@ pub fn split_in_direction_without_a_connected_client_still_creates_the_pane() {
             direction: Some(Direction::Down),
             borderless: None,
             border_style: None,
+            size: None,
+            flexible: false,
         },
         None,
         None,
@@ -991,6 +993,234 @@ pub fn split_in_direction_without_a_connected_client_still_creates_the_pane() {
         2,
         "the pane is created even though no client is attached"
     );
+}
+
+#[test]
+pub fn sized_tiled_pane_uses_the_requested_percent_of_the_split_space() {
+    let size = Size {
+        cols: 121,
+        rows: 20,
+    };
+    let mut tab = create_new_tab(size, true);
+    let original_rows = tab
+        .tiled_panes
+        .panes
+        .get(&PaneId::Terminal(1))
+        .unwrap()
+        .current_geom()
+        .rows
+        .as_usize();
+    tab.new_pane(
+        PaneId::Terminal(2),
+        None,
+        None,
+        false,
+        true,
+        NewPanePlacement::Tiled {
+            direction: Some(Direction::Down),
+            borderless: None,
+            border_style: None,
+            size: Some(SplitSize::Percent(30)),
+            flexible: false,
+        },
+        None,
+        None,
+    )
+    .unwrap();
+    let new_pane_rows = tab
+        .tiled_panes
+        .panes
+        .get(&PaneId::Terminal(2))
+        .unwrap()
+        .current_geom()
+        .rows
+        .as_usize();
+    let target_rows = tab
+        .tiled_panes
+        .panes
+        .get(&PaneId::Terminal(1))
+        .unwrap()
+        .current_geom()
+        .rows
+        .as_usize();
+    assert_eq!(new_pane_rows, original_rows * 30 / 100);
+    assert_eq!(target_rows, original_rows - new_pane_rows);
+}
+
+#[test]
+pub fn unsized_tiled_pane_keeps_the_equal_split() {
+    let size = Size {
+        cols: 121,
+        rows: 20,
+    };
+    let mut tab = create_new_tab(size, true);
+    let original_rows = tab
+        .tiled_panes
+        .panes
+        .get(&PaneId::Terminal(1))
+        .unwrap()
+        .current_geom()
+        .rows
+        .as_usize();
+    tab.new_pane(
+        PaneId::Terminal(2),
+        None,
+        None,
+        false,
+        true,
+        NewPanePlacement::Tiled {
+            direction: Some(Direction::Down),
+            borderless: None,
+            border_style: None,
+            size: None,
+            flexible: false,
+        },
+        None,
+        None,
+    )
+    .unwrap();
+    let new_pane_rows = tab
+        .tiled_panes
+        .panes
+        .get(&PaneId::Terminal(2))
+        .unwrap()
+        .current_geom()
+        .rows
+        .as_usize();
+    assert_eq!(new_pane_rows, original_rows / 2);
+}
+
+#[test]
+pub fn flexible_cell_size_creates_a_percent_constraint() {
+    let size = Size {
+        cols: 121,
+        rows: 20,
+    };
+    let mut tab = create_new_tab(size, true);
+    tab.new_pane(
+        PaneId::Terminal(2),
+        None,
+        None,
+        false,
+        true,
+        NewPanePlacement::Tiled {
+            direction: Some(Direction::Right),
+            borderless: None,
+            border_style: None,
+            size: Some(SplitSize::Fixed(20)),
+            flexible: true,
+        },
+        None,
+        None,
+    )
+    .unwrap();
+    let new_pane_geom = tab
+        .tiled_panes
+        .panes
+        .get(&PaneId::Terminal(2))
+        .unwrap()
+        .current_geom();
+    assert_eq!(new_pane_geom.cols.as_usize(), 20);
+    assert!(
+        matches!(new_pane_geom.cols.constraint, Constraint::Percent(_)),
+        "expected a flexible percent constraint, got {:?}",
+        new_pane_geom.cols.constraint
+    );
+}
+
+#[test]
+pub fn non_flexible_cell_size_creates_a_fixed_constraint() {
+    let size = Size {
+        cols: 121,
+        rows: 20,
+    };
+    let mut tab = create_new_tab(size, true);
+    tab.new_pane(
+        PaneId::Terminal(2),
+        None,
+        None,
+        false,
+        true,
+        NewPanePlacement::Tiled {
+            direction: Some(Direction::Right),
+            borderless: None,
+            border_style: None,
+            size: Some(SplitSize::Fixed(20)),
+            flexible: false,
+        },
+        None,
+        None,
+    )
+    .unwrap();
+    let new_pane_geom = tab
+        .tiled_panes
+        .panes
+        .get(&PaneId::Terminal(2))
+        .unwrap()
+        .current_geom();
+    assert_eq!(new_pane_geom.cols.as_usize(), 20);
+    assert_eq!(new_pane_geom.cols.constraint, Constraint::Fixed(20));
+}
+
+#[test]
+pub fn tiled_size_without_room_closes_the_new_pane() {
+    let size = Size { cols: 20, rows: 10 };
+    let mut tab = create_new_tab(size, true);
+    tab.new_pane(
+        PaneId::Terminal(2),
+        None,
+        None,
+        false,
+        true,
+        NewPanePlacement::Tiled {
+            direction: Some(Direction::Down),
+            borderless: None,
+            border_style: None,
+            size: Some(SplitSize::Fixed(8)),
+            flexible: false,
+        },
+        None,
+        None,
+    )
+    .unwrap();
+    assert!(!tab.tiled_panes.panes_contain(&PaneId::Terminal(2)));
+}
+
+#[test]
+pub fn sized_split_of_a_target_pane_uses_the_requested_percent() {
+    let size = Size {
+        cols: 121,
+        rows: 20,
+    };
+    let mut tab = create_new_tab(size, true);
+    let original_rows = tab
+        .tiled_panes
+        .panes
+        .get(&PaneId::Terminal(1))
+        .unwrap()
+        .current_geom()
+        .rows
+        .as_usize();
+    tab.horizontal_split_of_pane_id(
+        PaneId::Terminal(2),
+        None,
+        None,
+        PaneId::Terminal(1),
+        None,
+        None,
+        Some(SplitSize::Percent(25)),
+        false,
+    )
+    .unwrap();
+    let new_pane_rows = tab
+        .tiled_panes
+        .panes
+        .get(&PaneId::Terminal(2))
+        .unwrap()
+        .current_geom()
+        .rows
+        .as_usize();
+    assert_eq!(new_pane_rows, original_rows * 25 / 100);
 }
 
 #[test]
@@ -1022,6 +1252,8 @@ pub fn default_shell_started_in_a_folder_is_not_recorded_as_a_command() {
                 direction: None,
                 borderless: None,
                 border_style: None,
+                size: None,
+                flexible: false,
             },
             Some(1),
             None,
@@ -1059,6 +1291,8 @@ pub fn split_in_direction_without_a_connected_client_splits_the_existing_pane() 
             direction: Some(Direction::Right),
             borderless: None,
             border_style: None,
+            size: None,
+            flexible: false,
         },
         None,
         None,
@@ -18211,6 +18445,8 @@ fn add_tiled_plugin_pane(tab: &mut Tab, plugin_id: u32) {
             direction: None,
             borderless: None,
             border_style: None,
+            size: None,
+            flexible: false,
         },
         Some(1),
         None,
@@ -18948,6 +19184,8 @@ pub fn splitting_with_a_plugin_pane_closes_the_plugin() {
         PaneId::Terminal(1),
         None,
         None,
+        None,
+        false,
     )
     .unwrap();
     assert!(!tab.has_pane_with_pid(&PaneId::Plugin(5)));
@@ -18973,6 +19211,8 @@ pub fn splitting_a_missing_pane_closes_the_new_pane() {
         PaneId::Terminal(99),
         Some(completion),
         None,
+        None,
+        false,
     )
     .unwrap();
     assert!(!tab.has_pane_with_pid(&PaneId::Terminal(2)));
@@ -18995,6 +19235,8 @@ pub fn splitting_a_pane_without_room_closes_the_new_pane() {
         PaneId::Terminal(1),
         Some(completion),
         None,
+        None,
+        false,
     )
     .unwrap();
     assert!(!tab.has_pane_with_pid(&PaneId::Terminal(2)));
@@ -19087,11 +19329,23 @@ pub fn tiled_panes_hand_back_panes_they_could_not_place() {
     let missing = PaneId::Terminal(99);
     assert!(tab
         .tiled_panes
-        .split_pane_id_horizontally(PaneId::Terminal(2), detached_terminal_pane(2), missing)
+        .split_pane_id_horizontally(
+            PaneId::Terminal(2),
+            detached_terminal_pane(2),
+            missing,
+            None,
+            false
+        )
         .is_some());
     assert!(tab
         .tiled_panes
-        .split_pane_id_vertically(PaneId::Terminal(2), detached_terminal_pane(2), missing)
+        .split_pane_id_vertically(
+            PaneId::Terminal(2),
+            detached_terminal_pane(2),
+            missing,
+            None,
+            false
+        )
         .is_some());
     assert!(tab
         .tiled_panes
@@ -19100,11 +19354,23 @@ pub fn tiled_panes_hand_back_panes_they_could_not_place() {
     tab.tiled_panes.clear_active_panes();
     assert!(tab
         .tiled_panes
-        .split_pane_horizontally(PaneId::Terminal(2), detached_terminal_pane(2), 1)
+        .split_pane_horizontally(
+            PaneId::Terminal(2),
+            detached_terminal_pane(2),
+            1,
+            None,
+            false
+        )
         .is_some());
     assert!(tab
         .tiled_panes
-        .split_pane_vertically(PaneId::Terminal(2), detached_terminal_pane(2), 1)
+        .split_pane_vertically(
+            PaneId::Terminal(2),
+            detached_terminal_pane(2),
+            1,
+            None,
+            false
+        )
         .is_some());
     assert!(tab
         .tiled_panes

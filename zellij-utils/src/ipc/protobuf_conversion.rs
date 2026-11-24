@@ -1951,6 +1951,8 @@ impl From<crate::input::actions::Action>
                 borderless,
                 border_style,
                 tab_id,
+                size,
+                flexible,
                 ..
             } => ActionType::NewTiledPane(NewTiledPaneAction {
                 direction: direction.map(|d| direction_to_proto_i32(d)),
@@ -1961,6 +1963,8 @@ impl From<crate::input::actions::Action>
                 border_style: border_style.map(|b| b.into()),
                 tab_id: tab_id.map(|t| t as u32),
                 no_focus,
+                size: size.map(|s| s.into()),
+                flexible,
             }),
             crate::input::actions::Action::NewInPlacePane {
                 command,
@@ -3048,6 +3052,8 @@ impl TryFrom<crate::client_server_contract::client_server_contract::Action>
                     borderless: new_tiled_action.borderless,
                     border_style: new_tiled_action.border_style.map(|b| b.into()),
                     tab_id: new_tiled_action.tab_id.map(|t| t as usize),
+                    size: new_tiled_action.size.map(|s| s.try_into()).transpose()?,
+                    flexible: new_tiled_action.flexible,
                 })
             },
             ActionType::NewInPlacePane(new_in_place_action) => {
@@ -4724,15 +4730,21 @@ impl From<crate::data::NewPanePlacement>
                 direction,
                 borderless: None,
                 border_style: None,
+                size: None,
+                flexible: false,
             } => PlacementType::Tiled(direction.map(direction_to_proto_i32).unwrap_or(0)),
             crate::data::NewPanePlacement::Tiled {
                 direction,
                 borderless,
                 border_style,
+                size,
+                flexible,
             } => PlacementType::TiledWithOptions(TiledPlacement {
                 direction: direction.map(direction_to_proto_i32),
                 borderless,
                 border_style: border_style.map(|b| b.into()),
+                size: size.map(|s| s.into()),
+                flexible,
             }),
             crate::data::NewPanePlacement::Floating(coords) => {
                 PlacementType::Floating(coords.map(|c| c.into()).unwrap_or_default())
@@ -4801,6 +4813,8 @@ impl TryFrom<crate::client_server_contract::client_server_contract::NewPanePlace
                     direction,
                     borderless: opts.borderless,
                     border_style: opts.border_style.map(|b| b.into()),
+                    size: opts.size.map(|s| s.try_into()).transpose()?,
+                    flexible: opts.flexible,
                 })
             },
             PlacementType::StackedWithOptions(opts) => {
@@ -4829,6 +4843,8 @@ impl TryFrom<crate::client_server_contract::client_server_contract::NewPanePlace
                     direction,
                     borderless: None,
                     border_style: None,
+                    size: None,
+                    flexible: false,
                 })
             },
             PlacementType::Floating(coords) => {
@@ -4980,6 +4996,22 @@ impl From<crate::input::layout::SplitSize>
             crate::input::layout::SplitSize::Fixed(f) => Self {
                 size_type: Some(SizeType::Fixed(f as u32)),
             },
+        }
+    }
+}
+
+impl TryFrom<crate::client_server_contract::client_server_contract::SplitSize>
+    for crate::input::layout::SplitSize
+{
+    type Error = anyhow::Error;
+    fn try_from(
+        size: crate::client_server_contract::client_server_contract::SplitSize,
+    ) -> Result<Self> {
+        use crate::client_server_contract::client_server_contract::split_size::SizeType;
+        match size.size_type {
+            Some(SizeType::Percent(p)) => Ok(crate::input::layout::SplitSize::Percent(p as usize)),
+            Some(SizeType::Fixed(f)) => Ok(crate::input::layout::SplitSize::Fixed(f as usize)),
+            None => Err(anyhow!("SplitSize missing size_type")),
         }
     }
 }

@@ -470,6 +470,8 @@ impl TryFrom<ProtobufAction> for Action {
                             borderless,
                             border_style,
                             tab_id: None,
+                            size: None,
+                            flexible: false,
                         })
                     } else {
                         Ok(Action::NewTiledPane {
@@ -481,6 +483,8 @@ impl TryFrom<ProtobufAction> for Action {
                             borderless,
                             border_style,
                             tab_id: None,
+                            size: None,
+                            flexible: false,
                         })
                     }
                 },
@@ -3180,6 +3184,8 @@ impl TryFrom<ProtobufNewPanePlacement> for NewPanePlacement {
                     direction,
                     borderless: tiled.borderless,
                     border_style: tiled.border_style.map(BorderStyleOverride::from),
+                    size: None,
+                    flexible: false,
                 })
             },
             Some(PlacementVariant::Floating(floating)) => {
@@ -3227,6 +3233,7 @@ impl TryFrom<NewPanePlacement> for ProtobufNewPanePlacement {
                 direction,
                 borderless,
                 border_style,
+                ..
             } => {
                 let direction = direction.and_then(|d| {
                     let protobuf_direction: ProtobufResizeDirection = d.try_into().ok()?;
@@ -4158,6 +4165,8 @@ mod tests {
                 ..Default::default()
             }),
             tab_id: None,
+            size: None,
+            flexible: false,
         };
         let protobuf: ProtobufAction = original.clone().try_into().expect("encode");
         let decoded: Action = protobuf.try_into().expect("decode");
@@ -4183,6 +4192,8 @@ mod tests {
                     left: Some(LineStyle::Heavy),
                     ..Default::default()
                 }),
+                size: None,
+                flexible: false,
             },
             NewPanePlacement::InPlace {
                 pane_id_to_replace: None,

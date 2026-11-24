@@ -2,8 +2,9 @@
 
 pub use super::command::{OpenFilePayload, RunCommandAction};
 use super::layout::{
-    FloatingPaneLayout, Layout, PluginAlias, RunPlugin, RunPluginLocation, RunPluginOrAlias,
-    SwapFloatingLayout, SwapTiledLayout, TabLayoutInfo, TiledPaneLayout,
+    FloatingPaneLayout, Layout, PercentOrFixed, PluginAlias, RunPlugin, RunPluginLocation,
+    RunPluginOrAlias, SplitSize, SwapFloatingLayout, SwapTiledLayout, TabLayoutInfo,
+    TiledPaneLayout,
 };
 use crate::cli::CliAction;
 use crate::data::{
@@ -335,6 +336,10 @@ pub enum Action {
         borderless: Option<bool>,
         border_style: Option<BorderStyleOverride>,
         tab_id: Option<usize>,
+        #[serde(default)]
+        size: Option<SplitSize>,
+        #[serde(default)]
+        flexible: bool,
     },
     /// Open a new pane in place of the focused one, suppressing it instead
     /// Returns: Created pane ID (format: terminal_<id> or plugin_<id>)
@@ -863,6 +868,60 @@ impl Default for SearchOption {
     }
 }
 
+fn tiled_pane_size(
+    floating: bool,
+    in_place: bool,
+    stacked: bool,
+    plugin: bool,
+    direction: Option<Direction>,
+    size: Option<&str>,
+    width: Option<&str>,
+    height: Option<&str>,
+    flexible: bool,
+) -> Result<Option<(SplitSize, bool)>, String> {
+    if floating && flexible {
+        return Err("--flexible is only supported for tiled panes".to_string());
+    }
+    if floating {
+        return Ok(None);
+    }
+    if (in_place || stacked || plugin) && (size.is_some() || width.is_some() || height.is_some()) {
+        return Err(
+            "Tiled pane sizes are not supported with --stacked, --in-place or --plugin".to_string(),
+        );
+    }
+    let raw_size = match (size, width, height) {
+        (None, None, None) => {
+            if flexible {
+                return Err("--flexible requires --size, --width or --height".to_string());
+            }
+            return Ok(None);
+        },
+        (Some(size), _, _) => size,
+        (None, Some(width), _) => width,
+        (None, None, Some(height)) => height,
+    };
+    let direction =
+        direction.ok_or_else(|| "A tiled pane size requires --direction".to_string())?;
+    let is_vertical = matches!(direction, Direction::Left | Direction::Right);
+    if width.is_some() && !is_vertical {
+        return Err("--width requires --direction left or right for tiled panes".to_string());
+    }
+    if height.is_some() && is_vertical {
+        return Err("--height requires --direction up or down for tiled panes".to_string());
+    }
+    let parsed_size = PercentOrFixed::from_str(raw_size).map_err(|_| {
+        format!(
+            "Invalid pane size: {}, expecting a bare integer (eg. 30) or percent (eg. 30%)",
+            raw_size
+        )
+    })?;
+    if parsed_size.is_zero() {
+        return Err("Pane size must be greater than 0".to_string());
+    }
+    Ok(Some((SplitSize::from(parsed_size), flexible)))
+}
+
 impl Action {
     /// Checks that two Action are match except their mutable attributes.
     pub fn shallow_eq(&self, other_action: &Action) -> bool {
@@ -1345,6 +1404,8 @@ impl Action {
                 y,
                 width,
                 height,
+                size,
+                flexible,
                 pinned,
                 stacked,
                 blocking,
@@ -1372,6 +1433,17 @@ impl Action {
                     },
                     None => None,
                 };
+                let tiled_size = tiled_pane_size(
+                    floating,
+                    in_place,
+                    stacked,
+                    plugin.is_some(),
+                    direction,
+                    size.as_deref(),
+                    width.as_deref(),
+                    height.as_deref(),
+                    flexible,
+                )?;
                 let current_dir = get_current_dir();
                 // cwd should only be specified in a plugin alias if it was explicitly given to us,
                 // otherwise the current_dir might override a cwd defined in the alias itself
@@ -1442,6 +1514,8 @@ impl Action {
                             direction,
                             borderless,
                             border_style,
+                            size: tiled_size.map(|(size, _)| size),
+                            flexible: tiled_size.map(|(_, flexible)| flexible).unwrap_or(false),
                         }
                     };
 
@@ -1574,6 +1648,8 @@ impl Action {
                             borderless,
                             border_style,
                             tab_id,
+                            size: tiled_size.map(|(size, _)| size),
+                            flexible: tiled_size.map(|(_, flexible)| flexible).unwrap_or(false),
                         }])
                     }
                 } else {
@@ -1619,6 +1695,8 @@ impl Action {
                             borderless,
                             border_style,
                             tab_id,
+                            size: tiled_size.map(|(size, _)| size),
+                            flexible: tiled_size.map(|(_, flexible)| flexible).unwrap_or(false),
                         }])
                     }
                 }
@@ -4251,6 +4329,211 @@ mod tests {
             tab_id: None,
             border_style: border_style.map(|s| s.to_string()),
             notify: Default::default(),
+            size: None,
+            flexible: false,
+        }
+    }
+
+    fn tiled_new_pane_cli_action(
+        direction: Option<Direction>,
+        size: Option<&str>,
+        width: Option<&str>,
+        height: Option<&str>,
+        flexible: bool,
+    ) -> CliAction {
+        let mut action = new_pane_cli_action(false, None);
+        if let CliAction::NewPane {
+            direction: action_direction,
+            size: action_size,
+            width: action_width,
+            height: action_height,
+            flexible: action_flexible,
+            ..
+        } = &mut action
+        {
+            *action_direction = direction;
+            *action_size = size.map(|s| s.to_string());
+            *action_width = width.map(|w| w.to_string());
+            *action_height = height.map(|h| h.to_string());
+            *action_flexible = flexible;
+        }
+        action
+    }
+
+    fn tiled_size_of(action: &Action) -> Option<(SplitSize, bool)> {
+        match action {
+            Action::NewTiledPane { size, flexible, .. } => size.map(|size| (size, *flexible)),
+            Action::NewBlockingPane {
+                placement: NewPanePlacement::Tiled { size, flexible, .. },
+                ..
+            } => size.map(|size| (size, *flexible)),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn tiled_percent_size_sets_the_split_size() {
+        let cli_action =
+            tiled_new_pane_cli_action(Some(Direction::Right), Some("30%"), None, None, false);
+        let actions =
+            Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None).unwrap();
+        assert_eq!(
+            tiled_size_of(&actions[0]),
+            Some((SplitSize::Percent(30), false))
+        );
+    }
+
+    #[test]
+    fn tiled_height_sets_a_fixed_or_flexible_size() {
+        let cli_action =
+            tiled_new_pane_cli_action(Some(Direction::Down), None, None, Some("20"), false);
+        let actions =
+            Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None).unwrap();
+        assert_eq!(
+            tiled_size_of(&actions[0]),
+            Some((SplitSize::Fixed(20), false))
+        );
+
+        let cli_action =
+            tiled_new_pane_cli_action(Some(Direction::Down), None, None, Some("20"), true);
+        let actions =
+            Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None).unwrap();
+        assert_eq!(
+            tiled_size_of(&actions[0]),
+            Some((SplitSize::Fixed(20), true))
+        );
+    }
+
+    #[test]
+    fn tiled_width_sets_a_fixed_size() {
+        let cli_action =
+            tiled_new_pane_cli_action(Some(Direction::Right), None, Some("15"), None, false);
+        let actions =
+            Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None).unwrap();
+        assert_eq!(
+            tiled_size_of(&actions[0]),
+            Some((SplitSize::Fixed(15), false))
+        );
+    }
+
+    #[test]
+    fn tiled_size_without_a_direction_is_rejected() {
+        let cli_action = tiled_new_pane_cli_action(None, Some("30%"), None, None, false);
+        let error = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None)
+            .unwrap_err();
+        assert!(error.contains("requires --direction"), "{}", error);
+    }
+
+    #[test]
+    fn tiled_size_on_the_wrong_axis_is_rejected() {
+        let cli_action =
+            tiled_new_pane_cli_action(Some(Direction::Down), None, Some("20"), None, false);
+        let error = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None)
+            .unwrap_err();
+        assert!(error.contains("--width requires"), "{}", error);
+
+        let cli_action =
+            tiled_new_pane_cli_action(Some(Direction::Right), None, None, Some("20"), false);
+        let error = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None)
+            .unwrap_err();
+        assert!(error.contains("--height requires"), "{}", error);
+    }
+
+    #[test]
+    fn flexible_without_a_size_is_rejected() {
+        let cli_action = tiled_new_pane_cli_action(Some(Direction::Down), None, None, None, true);
+        let error = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None)
+            .unwrap_err();
+        assert!(error.contains("--flexible requires"), "{}", error);
+    }
+
+    #[test]
+    fn floating_flexible_and_tiled_sizes_are_rejected() {
+        let mut cli_action =
+            tiled_new_pane_cli_action(Some(Direction::Down), Some("20"), None, None, true);
+        if let CliAction::NewPane { floating, .. } = &mut cli_action {
+            *floating = true;
+        }
+        let error = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None)
+            .unwrap_err();
+        assert!(error.contains("--flexible is only supported"), "{}", error);
+
+        let mut cli_action =
+            tiled_new_pane_cli_action(Some(Direction::Down), Some("20"), None, None, false);
+        if let CliAction::NewPane { stacked, .. } = &mut cli_action {
+            *stacked = true;
+        }
+        let error = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None)
+            .unwrap_err();
+        assert!(error.contains("not supported with --stacked"), "{}", error);
+
+        let mut cli_action =
+            tiled_new_pane_cli_action(Some(Direction::Down), Some("20"), None, None, false);
+        if let CliAction::NewPane { in_place, .. } = &mut cli_action {
+            *in_place = true;
+        }
+        let error = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None)
+            .unwrap_err();
+        assert!(error.contains("not supported with --stacked"), "{}", error);
+    }
+
+    #[test]
+    fn invalid_tiled_sizes_are_rejected() {
+        for size in ["0", "101%", "abc"] {
+            let cli_action =
+                tiled_new_pane_cli_action(Some(Direction::Down), Some(size), None, None, false);
+            let error =
+                Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None)
+                    .unwrap_err();
+            assert!(
+                error.contains("Pane size must be greater than 0")
+                    || error.contains("Invalid pane size"),
+                "unexpected error for {}: {}",
+                size,
+                error
+            );
+        }
+    }
+
+    #[test]
+    fn blocking_tiled_pane_gets_the_size_on_its_placement() {
+        let mut cli_action =
+            tiled_new_pane_cli_action(Some(Direction::Down), Some("25%"), None, None, false);
+        if let CliAction::NewPane { blocking, .. } = &mut cli_action {
+            *blocking = true;
+        }
+        let actions =
+            Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None).unwrap();
+        assert_eq!(
+            tiled_size_of(&actions[0]),
+            Some((SplitSize::Percent(25), false))
+        );
+    }
+
+    #[test]
+    fn tiled_pane_without_a_size_keeps_the_default() {
+        let cli_action = tiled_new_pane_cli_action(Some(Direction::Down), None, None, None, false);
+        let actions =
+            Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None).unwrap();
+        assert_eq!(tiled_size_of(&actions[0]), None);
+    }
+
+    #[test]
+    fn floating_pane_width_is_unchanged() {
+        let mut cli_action = new_pane_cli_action(true, None);
+        if let CliAction::NewPane { width, .. } = &mut cli_action {
+            *width = Some("30%".to_string());
+        }
+        let actions =
+            Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None).unwrap();
+        match &actions[0] {
+            Action::NewFloatingPane {
+                coordinates: Some(coordinates),
+                ..
+            } => {
+                assert_eq!(coordinates.width, Some(PercentOrFixed::Percent(30)));
+            },
+            other => panic!("Expected NewFloatingPane action, got {:?}", other),
         }
     }
 
@@ -4485,6 +4768,8 @@ mod tests {
             tab_id: Some(3),
             border_style: None,
             notify: Default::default(),
+            size: None,
+            flexible: false,
         };
         let result = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None);
         assert!(result.is_ok());
@@ -4531,6 +4816,8 @@ mod tests {
             tab_id: None,
             border_style: None,
             notify: Default::default(),
+            size: None,
+            flexible: false,
         };
         let result = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None);
         assert!(result.is_ok());
@@ -4577,6 +4864,8 @@ mod tests {
             tab_id: None,
             border_style: None,
             notify: Default::default(),
+            size: None,
+            flexible: false,
         };
         let result = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None);
         assert!(result.is_ok());
@@ -4625,6 +4914,8 @@ mod tests {
             tab_id: None,
             border_style: None,
             notify: Default::default(),
+            size: None,
+            flexible: false,
         };
         let result = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None);
         assert!(result.is_err());
@@ -4664,6 +4955,8 @@ mod tests {
             tab_id: Some(5),
             border_style: None,
             notify: Default::default(),
+            size: None,
+            flexible: false,
         };
         let result = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None);
         assert!(result.is_ok());
@@ -4710,6 +5003,8 @@ mod tests {
             tab_id: Some(1),
             border_style: None,
             notify: Default::default(),
+            size: None,
+            flexible: false,
         };
         let result = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None);
         assert!(result.is_ok());
@@ -4756,6 +5051,8 @@ mod tests {
             tab_id: Some(2),
             border_style: None,
             notify: Default::default(),
+            size: None,
+            flexible: false,
         };
         let result = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None);
         assert!(result.is_ok());
@@ -4868,6 +5165,8 @@ mod tests {
             tab_id: Some(2),
             border_style: None,
             notify: Default::default(),
+            size: None,
+            flexible: false,
         };
         let result = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None);
         assert!(result.is_ok());
@@ -4914,6 +5213,8 @@ mod tests {
             tab_id: Some(1),
             border_style: None,
             notify: Default::default(),
+            size: None,
+            flexible: false,
         };
         let result = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None);
         assert!(result.is_ok());

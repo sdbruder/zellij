@@ -14,7 +14,7 @@ mod pane_resizer_test_mock;
 mod pane_resizer_tests;
 
 use crate::resize_pty;
-use tiled_pane_grid::{split, TiledPaneGrid, RESIZE_PERCENT};
+use tiled_pane_grid::{split, split_with_size, TiledPaneGrid, RESIZE_PERCENT};
 
 use crate::{
     os_input_output::ServerOsApi,
@@ -38,7 +38,7 @@ use zellij_utils::{
     errors::prelude::*,
     input::{
         command::RunCommand,
-        layout::{Run, RunPluginOrAlias, SplitDirection},
+        layout::{Run, RunPluginOrAlias, SplitDirection, SplitSize},
         options::PaneFrameStyle,
     },
     pane_size::{Offset, PaneGeom, Size, SizeInPixels, Viewport},
@@ -833,18 +833,22 @@ impl TiledPanes {
         pid: PaneId,
         new_pane: Box<dyn Pane>,
         client_id: ClientId,
+        size: Option<SplitSize>,
+        flexible: bool,
     ) -> Option<Box<dyn Pane>> {
         let Some(active_pane_id) = self.active_panes.get(&client_id).copied() else {
             log::error!("No active pane to split for client {}", client_id);
             return Some(new_pane);
         };
-        self.split_pane_id_horizontally(pid, new_pane, active_pane_id)
+        self.split_pane_id_horizontally(pid, new_pane, active_pane_id, size, flexible)
     }
     pub fn split_pane_id_horizontally(
         &mut self,
         pid: PaneId,
         mut new_pane: Box<dyn Pane>,
         active_pane_id: PaneId,
+        size: Option<SplitSize>,
+        flexible: bool,
     ) -> Option<Box<dyn Pane>> {
         let Some(mut full_pane_size) = self
             .panes
@@ -870,9 +874,13 @@ impl TiledPanes {
             log::error!("Pane to split {:?} not found", active_pane_id);
             return Some(new_pane);
         };
-        if let Some((top_winsize, bottom_winsize)) =
-            split(SplitDirection::Horizontal, &full_pane_size)
-        {
+        let split_result = match size {
+            Some(size) => {
+                split_with_size(SplitDirection::Horizontal, &full_pane_size, size, flexible)
+            },
+            None => split(SplitDirection::Horizontal, &full_pane_size),
+        };
+        if let Some((top_winsize, bottom_winsize)) = split_result {
             if active_pane.position_and_size().is_stacked() {
                 match StackedPanes::new_from_btreemap(&mut self.panes, &self.panes_to_hide)
                     .resize_panes_in_stack(&active_pane_id, top_winsize)
@@ -899,18 +907,22 @@ impl TiledPanes {
         pid: PaneId,
         new_pane: Box<dyn Pane>,
         client_id: ClientId,
+        size: Option<SplitSize>,
+        flexible: bool,
     ) -> Option<Box<dyn Pane>> {
         let Some(active_pane_id) = self.active_panes.get(&client_id).copied() else {
             log::error!("No active pane to split for client {}", client_id);
             return Some(new_pane);
         };
-        self.split_pane_id_vertically(pid, new_pane, active_pane_id)
+        self.split_pane_id_vertically(pid, new_pane, active_pane_id, size, flexible)
     }
     pub fn split_pane_id_vertically(
         &mut self,
         pid: PaneId,
         mut new_pane: Box<dyn Pane>,
         active_pane_id: PaneId,
+        size: Option<SplitSize>,
+        flexible: bool,
     ) -> Option<Box<dyn Pane>> {
         let Some(mut full_pane_size) = self
             .panes
@@ -936,9 +948,13 @@ impl TiledPanes {
             log::error!("Pane to split {:?} not found", active_pane_id);
             return Some(new_pane);
         };
-        if let Some((left_winsize, right_winsize)) =
-            split(SplitDirection::Vertical, &full_pane_size)
-        {
+        let split_result = match size {
+            Some(size) => {
+                split_with_size(SplitDirection::Vertical, &full_pane_size, size, flexible)
+            },
+            None => split(SplitDirection::Vertical, &full_pane_size),
+        };
+        if let Some((left_winsize, right_winsize)) = split_result {
             if active_pane.position_and_size().is_stacked() {
                 match StackedPanes::new_from_btreemap(&mut self.panes, &self.panes_to_hide)
                     .resize_panes_in_stack(&active_pane_id, left_winsize)
