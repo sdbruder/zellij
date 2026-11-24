@@ -835,12 +835,13 @@ impl TiledPanes {
         client_id: ClientId,
         size: Option<SplitSize>,
         flexible: bool,
+        force: bool,
     ) -> Option<Box<dyn Pane>> {
         let Some(active_pane_id) = self.active_panes.get(&client_id).copied() else {
             log::error!("No active pane to split for client {}", client_id);
             return Some(new_pane);
         };
-        self.split_pane_id_horizontally(pid, new_pane, active_pane_id, size, flexible)
+        self.split_pane_id_horizontally(pid, new_pane, active_pane_id, size, flexible, force)
     }
     pub fn split_pane_id_horizontally(
         &mut self,
@@ -849,6 +850,7 @@ impl TiledPanes {
         active_pane_id: PaneId,
         size: Option<SplitSize>,
         flexible: bool,
+        force: bool,
     ) -> Option<Box<dyn Pane>> {
         let Some(mut full_pane_size) = self
             .panes
@@ -875,9 +877,13 @@ impl TiledPanes {
             return Some(new_pane);
         };
         let split_result = match size {
-            Some(size) => {
-                split_with_size(SplitDirection::Horizontal, &full_pane_size, size, flexible)
-            },
+            Some(size) => split_with_size(
+                SplitDirection::Horizontal,
+                &full_pane_size,
+                size,
+                flexible,
+                force,
+            ),
             None => split(SplitDirection::Horizontal, &full_pane_size),
         };
         if let Some((top_winsize, bottom_winsize)) = split_result {
@@ -909,12 +915,13 @@ impl TiledPanes {
         client_id: ClientId,
         size: Option<SplitSize>,
         flexible: bool,
+        force: bool,
     ) -> Option<Box<dyn Pane>> {
         let Some(active_pane_id) = self.active_panes.get(&client_id).copied() else {
             log::error!("No active pane to split for client {}", client_id);
             return Some(new_pane);
         };
-        self.split_pane_id_vertically(pid, new_pane, active_pane_id, size, flexible)
+        self.split_pane_id_vertically(pid, new_pane, active_pane_id, size, flexible, force)
     }
     pub fn split_pane_id_vertically(
         &mut self,
@@ -923,6 +930,7 @@ impl TiledPanes {
         active_pane_id: PaneId,
         size: Option<SplitSize>,
         flexible: bool,
+        force: bool,
     ) -> Option<Box<dyn Pane>> {
         let Some(mut full_pane_size) = self
             .panes
@@ -949,9 +957,13 @@ impl TiledPanes {
             return Some(new_pane);
         };
         let split_result = match size {
-            Some(size) => {
-                split_with_size(SplitDirection::Vertical, &full_pane_size, size, flexible)
-            },
+            Some(size) => split_with_size(
+                SplitDirection::Vertical,
+                &full_pane_size,
+                size,
+                flexible,
+                force,
+            ),
             None => split(SplitDirection::Vertical, &full_pane_size),
         };
         if let Some((left_winsize, right_winsize)) = split_result {

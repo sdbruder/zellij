@@ -340,6 +340,8 @@ pub enum Action {
         size: Option<SplitSize>,
         #[serde(default)]
         flexible: bool,
+        #[serde(default)]
+        force: bool,
     },
     /// Open a new pane in place of the focused one, suppressing it instead
     /// Returns: Created pane ID (format: terminal_<id> or plugin_<id>)
@@ -878,9 +880,13 @@ fn tiled_pane_size(
     width: Option<&str>,
     height: Option<&str>,
     flexible: bool,
+    force: bool,
 ) -> Result<Option<(SplitSize, bool)>, String> {
     if floating && flexible {
         return Err("--flexible is only supported for tiled panes".to_string());
+    }
+    if floating && force {
+        return Err("--force is only supported for tiled panes".to_string());
     }
     if floating {
         return Ok(None);
@@ -890,10 +896,16 @@ fn tiled_pane_size(
             "Tiled pane sizes are not supported with --stacked, --in-place or --plugin".to_string(),
         );
     }
+    if (in_place || stacked || plugin) && force {
+        return Err("--force is only supported for tiled panes".to_string());
+    }
     let raw_size = match (size, width, height) {
         (None, None, None) => {
             if flexible {
                 return Err("--flexible requires --size, --width or --height".to_string());
+            }
+            if force {
+                return Err("--force requires --size, --width or --height".to_string());
             }
             return Ok(None);
         },
@@ -1406,6 +1418,7 @@ impl Action {
                 height,
                 size,
                 flexible,
+                force,
                 pinned,
                 stacked,
                 blocking,
@@ -1443,6 +1456,7 @@ impl Action {
                     width.as_deref(),
                     height.as_deref(),
                     flexible,
+                    force,
                 )?;
                 let current_dir = get_current_dir();
                 // cwd should only be specified in a plugin alias if it was explicitly given to us,
@@ -1516,6 +1530,7 @@ impl Action {
                             border_style,
                             size: tiled_size.map(|(size, _)| size),
                             flexible: tiled_size.map(|(_, flexible)| flexible).unwrap_or(false),
+                            force,
                         }
                     };
 
@@ -1650,6 +1665,7 @@ impl Action {
                             tab_id,
                             size: tiled_size.map(|(size, _)| size),
                             flexible: tiled_size.map(|(_, flexible)| flexible).unwrap_or(false),
+                            force,
                         }])
                     }
                 } else {
@@ -1697,6 +1713,7 @@ impl Action {
                             tab_id,
                             size: tiled_size.map(|(size, _)| size),
                             flexible: tiled_size.map(|(_, flexible)| flexible).unwrap_or(false),
+                            force,
                         }])
                     }
                 }
@@ -4331,6 +4348,7 @@ mod tests {
             notify: Default::default(),
             size: None,
             flexible: false,
+            force: false,
         }
     }
 
@@ -4516,6 +4534,43 @@ mod tests {
         let actions =
             Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None).unwrap();
         assert_eq!(tiled_size_of(&actions[0]), None);
+    }
+
+    #[test]
+    fn force_sets_the_action_flag_and_requires_a_tiled_size() {
+        let mut cli_action =
+            tiled_new_pane_cli_action(Some(Direction::Down), Some("20"), None, None, false);
+        if let CliAction::NewPane { force, .. } = &mut cli_action {
+            *force = true;
+        }
+        let actions =
+            Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None).unwrap();
+        match &actions[0] {
+            Action::NewTiledPane { force, .. } => assert!(*force),
+            other => panic!("Expected NewTiledPane action, got {:?}", other),
+        }
+
+        let mut cli_action =
+            tiled_new_pane_cli_action(Some(Direction::Down), None, None, None, false);
+        if let CliAction::NewPane { force, .. } = &mut cli_action {
+            *force = true;
+        }
+        let error = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None)
+            .unwrap_err();
+        assert!(error.contains("--force requires"), "{}", error);
+
+        let mut cli_action =
+            tiled_new_pane_cli_action(Some(Direction::Down), Some("20"), None, None, false);
+        if let CliAction::NewPane {
+            force, floating, ..
+        } = &mut cli_action
+        {
+            *force = true;
+            *floating = true;
+        }
+        let error = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None)
+            .unwrap_err();
+        assert!(error.contains("--force is only supported"), "{}", error);
     }
 
     #[test]
@@ -4770,6 +4825,7 @@ mod tests {
             notify: Default::default(),
             size: None,
             flexible: false,
+            force: false,
         };
         let result = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None);
         assert!(result.is_ok());
@@ -4818,6 +4874,7 @@ mod tests {
             notify: Default::default(),
             size: None,
             flexible: false,
+            force: false,
         };
         let result = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None);
         assert!(result.is_ok());
@@ -4866,6 +4923,7 @@ mod tests {
             notify: Default::default(),
             size: None,
             flexible: false,
+            force: false,
         };
         let result = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None);
         assert!(result.is_ok());
@@ -4916,6 +4974,7 @@ mod tests {
             notify: Default::default(),
             size: None,
             flexible: false,
+            force: false,
         };
         let result = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None);
         assert!(result.is_err());
@@ -4957,6 +5016,7 @@ mod tests {
             notify: Default::default(),
             size: None,
             flexible: false,
+            force: false,
         };
         let result = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None);
         assert!(result.is_ok());
@@ -5005,6 +5065,7 @@ mod tests {
             notify: Default::default(),
             size: None,
             flexible: false,
+            force: false,
         };
         let result = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None);
         assert!(result.is_ok());
@@ -5053,6 +5114,7 @@ mod tests {
             notify: Default::default(),
             size: None,
             flexible: false,
+            force: false,
         };
         let result = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None);
         assert!(result.is_ok());
@@ -5167,6 +5229,7 @@ mod tests {
             notify: Default::default(),
             size: None,
             flexible: false,
+            force: false,
         };
         let result = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None);
         assert!(result.is_ok());
@@ -5215,6 +5278,7 @@ mod tests {
             notify: Default::default(),
             size: None,
             flexible: false,
+            force: false,
         };
         let result = Action::actions_from_cli(cli_action, Box::new(|| PathBuf::from("/tmp")), None);
         assert!(result.is_ok());

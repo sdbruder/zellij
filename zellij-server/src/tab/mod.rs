@@ -3347,6 +3347,7 @@ impl Tab {
                 borderless,
                 size,
                 flexible,
+                force,
                 ..
             } => {
                 let is_vertical = direction == Direction::Left || direction == Direction::Right;
@@ -3385,6 +3386,7 @@ impl Tab {
                                 },
                                 size,
                                 flexible,
+                                force,
                             )?;
                         }
                     },
@@ -3403,6 +3405,7 @@ impl Tab {
                                     borderless,
                                     size,
                                     flexible,
+                                    force,
                                 )?;
                             },
                             Some(target_pane_id) => {
@@ -3415,6 +3418,7 @@ impl Tab {
                                     borderless,
                                     size,
                                     flexible,
+                                    force,
                                 )?;
                             },
                             None => {
@@ -4414,6 +4418,7 @@ impl Tab {
             SplitDirection::Horizontal,
             None,
             false,
+            false,
         )
     }
     pub fn vertical_split(
@@ -4433,6 +4438,7 @@ impl Tab {
             SplitDirection::Vertical,
             None,
             false,
+            false,
         )
     }
     fn split_active_pane(
@@ -4445,6 +4451,7 @@ impl Tab {
         split_direction: SplitDirection,
         size: Option<SplitSize>,
         flexible: bool,
+        force: bool,
     ) -> Result<()> {
         let split_direction_text = match split_direction {
             SplitDirection::Horizontal => "horizontally",
@@ -4514,6 +4521,7 @@ impl Tab {
                         client_id,
                         size,
                         flexible,
+                        force,
                     ),
                     SplitDirection::Vertical => self.tiled_panes.split_pane_vertically(
                         pid,
@@ -4521,6 +4529,7 @@ impl Tab {
                         client_id,
                         size,
                         flexible,
+                        force,
                     ),
                 };
                 if let Some(new_terminal) = split_result {
@@ -4563,6 +4572,7 @@ impl Tab {
         borderless: Option<bool>,
         size: Option<SplitSize>,
         flexible: bool,
+        force: bool,
     ) -> Result<()> {
         self.split_of_pane_id(
             pid,
@@ -4574,6 +4584,7 @@ impl Tab {
             borderless,
             size,
             flexible,
+            force,
         )
     }
     pub fn vertical_split_of_pane_id(
@@ -4586,6 +4597,7 @@ impl Tab {
         borderless: Option<bool>,
         size: Option<SplitSize>,
         flexible: bool,
+        force: bool,
     ) -> Result<()> {
         self.split_of_pane_id(
             pid,
@@ -4597,6 +4609,7 @@ impl Tab {
             borderless,
             size,
             flexible,
+            force,
         )
     }
     fn split_of_pane_id(
@@ -4610,6 +4623,7 @@ impl Tab {
         borderless: Option<bool>,
         size: Option<SplitSize>,
         flexible: bool,
+        force: bool,
     ) -> Result<()> {
         let err_context =
             || format!("failed to split pane {target_pane_id:?} without changing focus");
@@ -4690,6 +4704,7 @@ impl Tab {
                     target_pane_id,
                     size,
                     flexible,
+                    force,
                 ),
                 SplitDirection::Vertical => self.tiled_panes.split_pane_id_vertically(
                     pid,
@@ -4697,6 +4712,7 @@ impl Tab {
                     target_pane_id,
                     size,
                     flexible,
+                    force,
                 ),
             };
             if let Some(unplaced_pane) = unplaced_pane {

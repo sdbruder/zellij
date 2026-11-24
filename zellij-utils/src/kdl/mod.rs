@@ -2500,6 +2500,7 @@ impl TryFrom<(&KdlNode, &Options)> for Action {
                         tab_id: None,
                         size: None,
                         flexible: false,
+                        force: false,
                     })
                 }
             },

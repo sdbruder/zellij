@@ -2359,6 +2359,7 @@ pub fn split_with_size(
     rect: &PaneGeom,
     size: SplitSize,
     flexible: bool,
+    force: bool,
 ) -> Option<(PaneGeom, PaneGeom)> {
     let space = match direction {
         SplitDirection::Vertical => rect.cols,
@@ -2366,26 +2367,35 @@ pub fn split_with_size(
     };
     let parent_percent = space.as_percent()?;
     let parent_cells = space.as_usize();
-    let new_cells = match size {
+    let requested_cells = match size {
         SplitSize::Percent(percent) => {
             ((percent as f64 / 100.0) * parent_cells as f64).floor() as usize
         },
         SplitSize::Fixed(fixed) => fixed,
     };
-    let target_cells = parent_cells.saturating_sub(new_cells);
     let min_size = match direction {
         SplitDirection::Vertical => MIN_TERMINAL_WIDTH,
         SplitDirection::Horizontal => MIN_TERMINAL_HEIGHT,
     };
-    if new_cells < min_size || target_cells < min_size {
+    if parent_cells < min_size * 2 {
         return None;
     }
-    let new_percent = match size {
-        SplitSize::Percent(percent) => parent_percent * percent as f64 / 100.0,
-        SplitSize::Fixed(fixed) => parent_percent * fixed as f64 / parent_cells as f64,
+    let max_new_cells = parent_cells - min_size;
+    if !force && (requested_cells < min_size || requested_cells > max_new_cells) {
+        return None;
+    }
+    let new_cells = requested_cells.clamp(min_size, max_new_cells);
+    let target_cells = parent_cells - new_cells;
+    let new_percent = if requested_cells == new_cells {
+        match size {
+            SplitSize::Percent(percent) => parent_percent * percent as f64 / 100.0,
+            SplitSize::Fixed(fixed) => parent_percent * fixed as f64 / parent_cells as f64,
+        }
+    } else {
+        parent_percent * new_cells as f64 / parent_cells as f64
     };
     let new_dimension = match (size, flexible) {
-        (SplitSize::Fixed(fixed), false) => Dimension::fixed(fixed),
+        (SplitSize::Fixed(_), false) => Dimension::fixed(new_cells),
         _ => {
             let mut dimension = Dimension::percent(new_percent);
             dimension.set_inner(new_cells);
@@ -2451,6 +2461,7 @@ mod split_with_size_tests {
             &rect,
             SplitSize::Percent(30),
             false,
+            false,
         )
         .expect("expected a split");
         assert_eq!(target.cols.as_usize(), 70);
@@ -2466,6 +2477,7 @@ mod split_with_size_tests {
             SplitDirection::Horizontal,
             &rect,
             SplitSize::Fixed(10),
+            false,
             false,
         )
         .expect("expected a split");
@@ -2483,6 +2495,7 @@ mod split_with_size_tests {
             &rect,
             SplitSize::Fixed(10),
             true,
+            false,
         )
         .expect("expected a split");
         assert_eq!(target.rows.as_usize(), 30);
@@ -2499,6 +2512,7 @@ mod split_with_size_tests {
             &rect,
             SplitSize::Percent(30),
             false,
+            false,
         )
         .expect("expected a split");
         assert_eq!(new_pane.rows.as_usize(), 6);
@@ -2508,22 +2522,54 @@ mod split_with_size_tests {
     }
 
     #[test]
-    fn sizes_below_the_minimum_are_rejected() {
+    fn sizes_below_the_minimum_are_rejected_without_force() {
         let rect = rect_with_percent_space(20, 40, 100.0, 100.0);
         assert!(split_with_size(
             SplitDirection::Horizontal,
             &rect,
             SplitSize::Percent(5),
-            false
+            false,
+            false,
         )
         .is_none());
         assert!(split_with_size(
             SplitDirection::Horizontal,
             &rect,
             SplitSize::Fixed(38),
-            false
+            false,
+            false,
         )
         .is_none());
+    }
+
+    #[test]
+    fn sizes_below_the_minimum_are_clamped() {
+        let rect = rect_with_percent_space(20, 40, 100.0, 100.0);
+        let (target, new_pane) = split_with_size(
+            SplitDirection::Horizontal,
+            &rect,
+            SplitSize::Percent(5),
+            false,
+            true,
+        )
+        .expect("expected a split");
+        assert_eq!(new_pane.rows.as_usize(), MIN_TERMINAL_HEIGHT);
+        assert_eq!(new_pane.rows.constraint, Constraint::Percent(12.5));
+        assert_eq!(target.rows.as_usize(), 35);
+        assert_eq!(target.rows.constraint, Constraint::Percent(87.5));
+
+        let (target, new_pane) = split_with_size(
+            SplitDirection::Horizontal,
+            &rect,
+            SplitSize::Fixed(38),
+            false,
+            true,
+        )
+        .expect("expected a split");
+        assert_eq!(new_pane.rows.as_usize(), 35);
+        assert_eq!(new_pane.rows.constraint, Constraint::Fixed(35));
+        assert_eq!(target.rows.as_usize(), MIN_TERMINAL_HEIGHT);
+        assert_eq!(target.rows.constraint, Constraint::Percent(12.5));
     }
 
     #[test]
@@ -2537,7 +2583,8 @@ mod split_with_size_tests {
             SplitDirection::Horizontal,
             &rect,
             SplitSize::Fixed(10),
-            false
+            false,
+            false,
         )
         .is_none());
     }

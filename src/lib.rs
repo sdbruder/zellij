@@ -167,6 +167,7 @@ fn main() {
                 tab_id,
                 size: None,
                 flexible: false,
+                force: false,
             };
             commands::send_action_to_session(command_cli_action, opts.session, config);
             std::process::exit(0);
@@ -226,6 +227,7 @@ fn main() {
                 tab_id,
                 size: None,
                 flexible: false,
+                force: false,
             };
             commands::send_action_to_session(command_cli_action, opts.session, config);
             std::process::exit(0);

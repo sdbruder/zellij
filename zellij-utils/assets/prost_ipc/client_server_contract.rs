@@ -1075,6 +1075,8 @@ pub struct NewTiledPaneAction {
     pub size: ::core::option::Option<SplitSize>,
     #[prost(bool, tag="13")]
     pub flexible: bool,
+    #[prost(bool, tag="14")]
+    pub force: bool,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1734,6 +1736,8 @@ pub struct TiledPlacement {
     pub size: ::core::option::Option<SplitSize>,
     #[prost(bool, tag="5")]
     pub flexible: bool,
+    #[prost(bool, tag="6")]
+    pub force: bool,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

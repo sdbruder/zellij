@@ -947,6 +947,7 @@ fn route_action_with_origin(
                     border_style: None,
                     size: None,
                     flexible: false,
+                    force: false,
                 },
                 None => NewPanePlacement::NoPreference {
                     borderless: None,
@@ -1063,6 +1064,7 @@ fn route_action_with_origin(
                                 .and_then(|c| c.border_style),
                             size: None,
                             flexible: false,
+                            force: false,
                         }
                     },
                     start_suppressed,
@@ -1222,6 +1224,7 @@ fn route_action_with_origin(
             tab_id,
             size,
             flexible,
+            force,
         } => {
             let run_cmd = new_pane_terminal_action(run_command, &default_shell);
             let client_tab_index_or_paneid =
@@ -1236,6 +1239,7 @@ fn route_action_with_origin(
                         border_style,
                         size,
                         flexible,
+                        force,
                     },
                     false,
                     client_tab_index_or_paneid,
@@ -1297,6 +1301,7 @@ fn route_action_with_origin(
                         border_style: None,
                         size: None,
                         flexible: false,
+                        force: false,
                     },
                     false,
                     client_tab_index_or_paneid,
@@ -4471,6 +4476,7 @@ mod tests {
             tab_id: None,
             size: None,
             flexible: false,
+            force: false,
         }
     }
 

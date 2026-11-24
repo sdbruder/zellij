@@ -1561,6 +1561,9 @@ pub enum CliAction {
         /// Treat a tiled pane size in cells as an initial size only, so the pane stays flexible on later resizes. Percent sizes are always flexible
         #[clap(long)]
         flexible: bool,
+        /// Force the tiled split with the minimum allowed size when the requested size does not fit
+        #[clap(long)]
+        force: bool,
         /// Whether to pin a floating pane so that it is always on top
         #[clap(long, requires("floating"))]
         pinned: Option<bool>,

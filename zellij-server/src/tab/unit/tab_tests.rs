@@ -983,6 +983,7 @@ pub fn split_in_direction_without_a_connected_client_still_creates_the_pane() {
             border_style: None,
             size: None,
             flexible: false,
+            force: false,
         },
         None,
         None,
@@ -1022,6 +1023,7 @@ pub fn sized_tiled_pane_uses_the_requested_percent_of_the_split_space() {
             border_style: None,
             size: Some(SplitSize::Percent(30)),
             flexible: false,
+            force: false,
         },
         None,
         None,
@@ -1074,6 +1076,7 @@ pub fn unsized_tiled_pane_keeps_the_equal_split() {
             border_style: None,
             size: None,
             flexible: false,
+            force: false,
         },
         None,
         None,
@@ -1109,6 +1112,7 @@ pub fn flexible_cell_size_creates_a_percent_constraint() {
             border_style: None,
             size: Some(SplitSize::Fixed(20)),
             flexible: true,
+            force: false,
         },
         None,
         None,
@@ -1147,6 +1151,7 @@ pub fn non_flexible_cell_size_creates_a_fixed_constraint() {
             border_style: None,
             size: Some(SplitSize::Fixed(20)),
             flexible: false,
+            force: false,
         },
         None,
         None,
@@ -1178,12 +1183,142 @@ pub fn tiled_size_without_room_closes_the_new_pane() {
             border_style: None,
             size: Some(SplitSize::Fixed(8)),
             flexible: false,
+            force: false,
         },
         None,
         None,
     )
     .unwrap();
     assert!(!tab.tiled_panes.panes_contain(&PaneId::Terminal(2)));
+}
+
+#[test]
+pub fn forced_tiled_size_uses_the_minimum_size_when_it_does_not_fit() {
+    let size = Size { cols: 20, rows: 10 };
+    let mut tab = create_new_tab(size, true);
+    tab.new_pane(
+        PaneId::Terminal(2),
+        None,
+        None,
+        false,
+        true,
+        NewPanePlacement::Tiled {
+            direction: Some(Direction::Down),
+            borderless: None,
+            border_style: None,
+            size: Some(SplitSize::Fixed(8)),
+            flexible: false,
+            force: true,
+        },
+        None,
+        None,
+    )
+    .unwrap();
+    let new_pane_rows = tab
+        .tiled_panes
+        .panes
+        .get(&PaneId::Terminal(2))
+        .unwrap()
+        .current_geom()
+        .rows
+        .as_usize();
+    let target_rows = tab
+        .tiled_panes
+        .panes
+        .get(&PaneId::Terminal(1))
+        .unwrap()
+        .current_geom()
+        .rows
+        .as_usize();
+    assert_eq!(new_pane_rows, 5);
+    assert_eq!(target_rows, 5);
+}
+
+#[test]
+pub fn rejected_sized_pane_does_not_change_the_layout_and_can_be_added_after_a_close() {
+    let size = Size {
+        cols: 121,
+        rows: 20,
+    };
+    let mut tab = create_new_tab(size, true);
+    let add_fixed_pane = |tab: &mut Tab, pane_id: u32| {
+        tab.new_pane(
+            PaneId::Terminal(pane_id),
+            None,
+            None,
+            false,
+            true,
+            NewPanePlacement::Tiled {
+                direction: Some(Direction::Down),
+                borderless: None,
+                border_style: None,
+                size: Some(SplitSize::Fixed(5)),
+                flexible: false,
+                force: false,
+            },
+            None,
+            None,
+        )
+        .unwrap();
+    };
+    add_fixed_pane(&mut tab, 2);
+    add_fixed_pane(&mut tab, 3);
+    add_fixed_pane(&mut tab, 4);
+    assert_eq!(tab.tiled_panes.panes.len(), 4);
+    let target_rows_before_rejection = tab
+        .tiled_panes
+        .panes
+        .get(&PaneId::Terminal(1))
+        .unwrap()
+        .current_geom()
+        .rows
+        .as_usize();
+
+    add_fixed_pane(&mut tab, 5);
+    assert!(!tab.tiled_panes.panes_contain(&PaneId::Terminal(5)));
+    assert_eq!(tab.tiled_panes.panes.len(), 4);
+    assert_eq!(
+        tab.tiled_panes
+            .panes
+            .get(&PaneId::Terminal(1))
+            .unwrap()
+            .current_geom()
+            .rows
+            .as_usize(),
+        target_rows_before_rejection
+    );
+
+    tab.close_pane(PaneId::Terminal(2), false, None);
+    assert_eq!(tab.tiled_panes.panes.len(), 3);
+    add_fixed_pane(&mut tab, 6);
+    assert!(tab.tiled_panes.panes_contain(&PaneId::Terminal(6)));
+    assert_eq!(tab.tiled_panes.panes.len(), 4);
+}
+
+#[test]
+pub fn forced_size_still_cannot_split_a_pane_without_minimum_room() {
+    let size = Size { cols: 8, rows: 4 };
+    let mut tab = create_new_tab(size, true);
+    tab.new_pane(
+        PaneId::Terminal(2),
+        None,
+        None,
+        false,
+        true,
+        NewPanePlacement::Tiled {
+            direction: Some(Direction::Down),
+            borderless: None,
+            border_style: None,
+            size: Some(SplitSize::Fixed(5)),
+            flexible: false,
+            force: true,
+        },
+        None,
+        None,
+    )
+    .unwrap();
+    assert!(!tab.tiled_panes.panes_contain(&PaneId::Terminal(2)));
+    assert_eq!(tab.tiled_panes.panes.len(), 1);
 }
 
 #[test]
@@ -1209,6 +1344,7 @@ pub fn sized_split_of_a_target_pane_uses_the_requested_percent() {
         None,
         None,
         Some(SplitSize::Percent(25)),
+        false,
         false,
     )
     .unwrap();
@@ -1254,6 +1390,7 @@ pub fn default_shell_started_in_a_folder_is_not_recorded_as_a_command() {
                 border_style: None,
                 size: None,
                 flexible: false,
+                force: false,
             },
             Some(1),
             None,
@@ -1293,6 +1430,7 @@ pub fn split_in_direction_without_a_connected_client_splits_the_existing_pane() 
             border_style: None,
             size: None,
             flexible: false,
+            force: false,
         },
         None,
         None,
@@ -18447,6 +18585,7 @@ fn add_tiled_plugin_pane(tab: &mut Tab, plugin_id: u32) {
             border_style: None,
             size: None,
             flexible: false,
+            force: false,
         },
         Some(1),
         None,
@@ -19186,6 +19325,7 @@ pub fn splitting_with_a_plugin_pane_closes_the_plugin() {
         None,
         None,
         false,
+        false,
     )
     .unwrap();
     assert!(!tab.has_pane_with_pid(&PaneId::Plugin(5)));
@@ -19213,6 +19353,7 @@ pub fn splitting_a_missing_pane_closes_the_new_pane() {
         None,
         None,
         false,
+        false,
     )
     .unwrap();
     assert!(!tab.has_pane_with_pid(&PaneId::Terminal(2)));
@@ -19236,6 +19377,7 @@ pub fn splitting_a_pane_without_room_closes_the_new_pane() {
         Some(completion),
         None,
         None,
+        false,
         false,
     )
     .unwrap();
@@ -19334,6 +19476,7 @@ pub fn tiled_panes_hand_back_panes_they_could_not_place() {
             detached_terminal_pane(2),
             missing,
             None,
+            false,
             false
         )
         .is_some());
@@ -19344,6 +19487,7 @@ pub fn tiled_panes_hand_back_panes_they_could_not_place() {
             detached_terminal_pane(2),
             missing,
             None,
+            false,
             false
         )
         .is_some());
@@ -19359,6 +19503,7 @@ pub fn tiled_panes_hand_back_panes_they_could_not_place() {
             detached_terminal_pane(2),
             1,
             None,
+            false,
             false
         )
         .is_some());
@@ -19369,6 +19514,7 @@ pub fn tiled_panes_hand_back_panes_they_could_not_place() {
             detached_terminal_pane(2),
             1,
             None,
+            false,
             false
         )
         .is_some());

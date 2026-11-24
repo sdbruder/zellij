@@ -490,6 +490,7 @@ fn control_payload_to_server_msg(
                     border_style: None,
                     size: None,
                     flexible: false,
+                    force: false,
                 },
                 terminal_id: None,
                 client_id: None,

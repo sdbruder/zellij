@@ -472,6 +472,7 @@ impl TryFrom<ProtobufAction> for Action {
                             tab_id: None,
                             size: None,
                             flexible: false,
+                            force: false,
                         })
                     } else {
                         Ok(Action::NewTiledPane {
@@ -485,6 +486,7 @@ impl TryFrom<ProtobufAction> for Action {
                             tab_id: None,
                             size: None,
                             flexible: false,
+                            force: false,
                         })
                     }
                 },
@@ -3186,6 +3188,7 @@ impl TryFrom<ProtobufNewPanePlacement> for NewPanePlacement {
                     border_style: tiled.border_style.map(BorderStyleOverride::from),
                     size: None,
                     flexible: false,
+                    force: false,
                 })
             },
             Some(PlacementVariant::Floating(floating)) => {
@@ -4167,6 +4170,7 @@ mod tests {
             tab_id: None,
             size: None,
             flexible: false,
+            force: false,
         };
         let protobuf: ProtobufAction = original.clone().try_into().expect("encode");
         let decoded: Action = protobuf.try_into().expect("decode");
@@ -4194,6 +4198,7 @@ mod tests {
                 }),
                 size: None,
                 flexible: false,
+                force: false,
             },
             NewPanePlacement::InPlace {
                 pane_id_to_replace: None,

@@ -4894,6 +4894,8 @@ pub enum NewPanePlacement {
         size: Option<SplitSize>,
         #[serde(default)]
         flexible: bool,
+        #[serde(default)]
+        force: bool,
     },
     Floating(Option<FloatingPaneCoordinates>),
     InPlace {
@@ -5015,6 +5017,7 @@ impl NewPanePlacement {
                 borderless,
                 size,
                 flexible,
+                force,
                 ..
             } => NewPanePlacement::Tiled {
                 direction,
@@ -5022,6 +5025,7 @@ impl NewPanePlacement {
                 border_style,
                 size,
                 flexible,
+                force,
             },
             NewPanePlacement::Floating(coords) => NewPanePlacement::Floating(Some(
                 coords.unwrap_or_default().with_border_style(border_style),
@@ -6264,6 +6268,7 @@ fn new_pane_placement_carries_a_border_style() {
         border_style: None,
         size: None,
         flexible: false,
+        force: false,
     }
     .with_border_style(Some(BorderStyleOverride {
         all: Some(LineStyle::Heavy),

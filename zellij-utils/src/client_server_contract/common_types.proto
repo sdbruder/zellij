@@ -582,6 +582,7 @@ message NewTiledPaneAction {
   optional BorderStyleOverride border_style = 11;
   optional SplitSize size = 12;
   bool flexible = 13;
+  bool force = 14;
 }
 
 message NewInPlacePaneAction {
@@ -1007,6 +1008,7 @@ message TiledPlacement {
   optional BorderStyleOverride border_style = 3;
   optional SplitSize size = 4;
   bool flexible = 5;
+  bool force = 6;
 }
 
 message StackedPlacement {
