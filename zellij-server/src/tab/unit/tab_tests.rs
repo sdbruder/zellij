@@ -1334,6 +1334,61 @@ pub fn rejected_sized_pane_does_not_change_the_layout_and_can_be_added_after_a_c
 }
 
 #[test]
+pub fn up_and_left_select_the_split_axis_only() {
+    fn add_with_direction(direction: Direction) -> Tab {
+        let mut tab = create_new_tab(
+            Size {
+                cols: 121,
+                rows: 20,
+            },
+            true,
+        );
+        tab.new_pane(
+            PaneId::Terminal(2),
+            None,
+            None,
+            false,
+            true,
+            NewPanePlacement::Tiled {
+                direction: Some(direction),
+                borderless: None,
+                border_style: None,
+                size: Some(SplitSize::Fixed(5)),
+                flexible: false,
+                force: false,
+            },
+            None,
+            None,
+        )
+        .unwrap();
+        tab
+    }
+    fn dimensions(tab: &Tab, pane_id: u32) -> (usize, usize) {
+        let geom = tab
+            .tiled_panes
+            .panes
+            .get(&PaneId::Terminal(pane_id))
+            .expect("pane exists")
+            .current_geom();
+        (geom.rows.as_usize(), geom.cols.as_usize())
+    }
+
+    let down = add_with_direction(Direction::Down);
+    let up = add_with_direction(Direction::Up);
+    assert_eq!(dimensions(&down, 1), dimensions(&up, 1));
+    assert_eq!(dimensions(&down, 2), dimensions(&up, 2));
+    assert_eq!(dimensions(&up, 2).0, 5);
+    assert_eq!(dimensions(&up, 2).1, dimensions(&up, 1).1);
+
+    let right = add_with_direction(Direction::Right);
+    let left = add_with_direction(Direction::Left);
+    assert_eq!(dimensions(&right, 1), dimensions(&left, 1));
+    assert_eq!(dimensions(&right, 2), dimensions(&left, 2));
+    assert_eq!(dimensions(&left, 2).1, 5);
+    assert_eq!(dimensions(&left, 2).0, dimensions(&left, 1).0);
+}
+
+#[test]
 pub fn fixed_and_flexible_cell_sizes_resize_differently() {
     fn add_ten_row_pane(tab: &mut Tab, flexible: bool) {
         tab.new_pane(

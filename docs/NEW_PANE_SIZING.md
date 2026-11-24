@@ -89,7 +89,8 @@ count.
 `--direction` selects the split axis. A new tiled pane is placed after the
 target pane: to the right for a vertical split, below for a horizontal split.
 `--direction up` and `--direction left` do not place the new pane before the
-target. This matches the existing behavior.
+target. For placement they are equivalent to `down` and `right`: the direction
+only selects the split axis. This matches the pre-existing behavior.
 
 ## Validation
 
