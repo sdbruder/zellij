@@ -2354,6 +2354,11 @@ pub fn split(direction: SplitDirection, rect: &PaneGeom) -> Option<(PaneGeom, Pa
     }
 }
 
+/// Split `rect` with a requested initial size.
+///
+/// The target pane keeps the remaining space. Without `force`, an unfit
+/// request returns `None`; with `force`, it is clamped so both panes keep the
+/// minimum size. See https://github.com/zellij-org/zellij/issues/5984.
 pub fn split_with_size(
     direction: SplitDirection,
     rect: &PaneGeom,

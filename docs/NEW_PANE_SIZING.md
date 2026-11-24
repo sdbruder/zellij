@@ -3,6 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Issue | [#5984: Allow setting the initial size of a new tiled pane from the CLI](https://github.com/zellij-org/zellij/issues/5984) |
+| Discussion | [Implementation comment on #5984](https://github.com/zellij-org/zellij/issues/5984#issuecomment-7141017026) |
 | Branch | `feat/5984-new-pane-sizing` |
 | Status | Implemented |
 | Reported version | Zellij 0.46.1 |

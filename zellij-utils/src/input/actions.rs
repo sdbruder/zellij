@@ -870,6 +870,9 @@ impl Default for SearchOption {
     }
 }
 
+/// Validate and parse tiled pane sizing for `zellij action new-pane`.
+///
+/// See https://github.com/zellij-org/zellij/issues/5984.
 fn tiled_pane_size(
     floating: bool,
     in_place: bool,
