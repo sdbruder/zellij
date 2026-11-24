@@ -1235,6 +1235,44 @@ pub fn forced_tiled_size_uses_the_minimum_size_when_it_does_not_fit() {
 }
 
 #[test]
+pub fn focused_client_sized_split_uses_the_requested_size() {
+    let mut tab = create_new_tab(
+        Size {
+            cols: 121,
+            rows: 20,
+        },
+        true,
+    );
+    tab.new_pane(
+        PaneId::Terminal(2),
+        None,
+        None,
+        false,
+        true,
+        NewPanePlacement::Tiled {
+            direction: Some(Direction::Down),
+            borderless: None,
+            border_style: None,
+            size: Some(SplitSize::Fixed(5)),
+            flexible: false,
+            force: false,
+        },
+        Some(1),
+        None,
+    )
+    .unwrap();
+    let new_pane_rows = tab
+        .tiled_panes
+        .panes
+        .get(&PaneId::Terminal(2))
+        .unwrap()
+        .current_geom()
+        .rows
+        .as_usize();
+    assert_eq!(new_pane_rows, 5);
+}
+
+#[test]
 pub fn rejected_sized_pane_does_not_change_the_layout_and_can_be_added_after_a_close() {
     let size = Size {
         cols: 121,
@@ -1293,6 +1331,71 @@ pub fn rejected_sized_pane_does_not_change_the_layout_and_can_be_added_after_a_c
     add_fixed_pane(&mut tab, 6);
     assert!(tab.tiled_panes.panes_contain(&PaneId::Terminal(6)));
     assert_eq!(tab.tiled_panes.panes.len(), 4);
+}
+
+#[test]
+pub fn fixed_and_flexible_cell_sizes_resize_differently() {
+    fn add_ten_row_pane(tab: &mut Tab, flexible: bool) {
+        tab.new_pane(
+            PaneId::Terminal(2),
+            None,
+            None,
+            false,
+            true,
+            NewPanePlacement::Tiled {
+                direction: Some(Direction::Down),
+                borderless: None,
+                border_style: None,
+                size: Some(SplitSize::Fixed(10)),
+                flexible,
+                force: false,
+            },
+            Some(1),
+            None,
+        )
+        .unwrap();
+    }
+    fn ten_row_pane_rows(tab: &Tab) -> usize {
+        tab.tiled_panes
+            .panes
+            .get(&PaneId::Terminal(2))
+            .expect("pane exists")
+            .current_geom()
+            .rows
+            .as_usize()
+    }
+
+    let mut fixed_tab = create_new_tab(
+        Size {
+            cols: 121,
+            rows: 20,
+        },
+        true,
+    );
+    add_ten_row_pane(&mut fixed_tab, false);
+    fixed_tab
+        .resize_whole_tab(Size {
+            cols: 160,
+            rows: 40,
+        })
+        .unwrap();
+    assert_eq!(ten_row_pane_rows(&fixed_tab), 10);
+
+    let mut flexible_tab = create_new_tab(
+        Size {
+            cols: 121,
+            rows: 20,
+        },
+        true,
+    );
+    add_ten_row_pane(&mut flexible_tab, true);
+    flexible_tab
+        .resize_whole_tab(Size {
+            cols: 160,
+            rows: 40,
+        })
+        .unwrap();
+    assert_eq!(ten_row_pane_rows(&flexible_tab), 20);
 }
 
 #[test]

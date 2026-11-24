@@ -6266,9 +6266,9 @@ fn new_pane_placement_carries_a_border_style() {
         direction: None,
         borderless: None,
         border_style: None,
-        size: None,
-        flexible: false,
-        force: false,
+        size: Some(SplitSize::Fixed(10)),
+        flexible: true,
+        force: true,
     }
     .with_border_style(Some(BorderStyleOverride {
         all: Some(LineStyle::Heavy),
@@ -6281,6 +6281,19 @@ fn new_pane_placement_carries_a_border_style() {
             ..Default::default()
         })
     );
+    match placement {
+        NewPanePlacement::Tiled {
+            size,
+            flexible,
+            force,
+            ..
+        } => {
+            assert_eq!(size, Some(SplitSize::Fixed(10)));
+            assert!(flexible);
+            assert!(force);
+        },
+        other => panic!("Expected Tiled placement, got {:?}", other),
+    }
 }
 
 #[test]

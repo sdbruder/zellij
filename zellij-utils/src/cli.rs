@@ -2581,4 +2581,58 @@ mod tests {
     fn set_resurrect_command_requires_command_or_clear() {
         assert!(parse_set_resurrect_command(&[]).is_err());
     }
+
+    fn parse_new_pane(args: &[&str]) -> Result<CliAction, clap::Error> {
+        let mut full_args = vec!["action".to_owned(), "new-pane".to_owned()];
+        full_args.extend(args.iter().map(|arg| arg.to_string()));
+        let cli = on_large_stack(move || {
+            let mut argv = vec!["zellij".to_owned()];
+            argv.extend(full_args);
+            CliArgs::try_parse_from(argv)
+        })?;
+        match cli.command {
+            Some(Command::Action(action)) => Ok(*action),
+            other => panic!("Expected Action, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn new_pane_parses_tiled_size_flags() {
+        let action = parse_new_pane(&[
+            "--direction",
+            "down",
+            "--size",
+            "30%",
+            "--flexible",
+            "--force",
+        ])
+        .unwrap();
+        match action {
+            CliAction::NewPane {
+                direction,
+                size,
+                flexible,
+                force,
+                ..
+            } => {
+                assert_eq!(direction, Some(Direction::Down));
+                assert_eq!(size.as_deref(), Some("30%"));
+                assert!(flexible);
+                assert!(force);
+            },
+            other => panic!("Expected NewPane, got {:?}", other),
+        }
+
+        assert!(parse_new_pane(&["--direction", "right", "--width", "20"]).is_ok());
+        assert!(parse_new_pane(&["--direction", "down", "--height", "20"]).is_ok());
+    }
+
+    #[test]
+    fn new_pane_rejects_ambiguous_size_flags() {
+        assert!(parse_new_pane(&["--size", "30%", "--width", "20"]).is_err());
+        assert!(parse_new_pane(&["--size", "30%", "--height", "20"]).is_err());
+        assert!(parse_new_pane(&["--size", "30%", "--floating"]).is_err());
+        assert!(parse_new_pane(&["--size", "30%", "--stacked"]).is_err());
+        assert!(parse_new_pane(&["--size", "30%", "--in-place"]).is_err());
+    }
 }

@@ -2570,6 +2570,18 @@ mod split_with_size_tests {
         assert_eq!(new_pane.rows.constraint, Constraint::Fixed(35));
         assert_eq!(target.rows.as_usize(), MIN_TERMINAL_HEIGHT);
         assert_eq!(target.rows.constraint, Constraint::Percent(12.5));
+
+        let (target, new_pane) = split_with_size(
+            SplitDirection::Horizontal,
+            &rect,
+            SplitSize::Fixed(38),
+            true,
+            true,
+        )
+        .expect("expected a split");
+        assert_eq!(new_pane.rows.as_usize(), 35);
+        assert_eq!(new_pane.rows.constraint, Constraint::Percent(87.5));
+        assert_eq!(target.rows.as_usize(), MIN_TERMINAL_HEIGHT);
     }
 
     #[test]

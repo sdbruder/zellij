@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
+* feat: set the initial size of a new tiled pane from `zellij action new-pane`, with `--size`, `--flexible` and `--force` (https://github.com/zellij-org/zellij/issues/5984)
 
 ## [0.46.1] - 2026-11-24
 * fix: "Show inbox" opens the inbox even when it's empty (https://github.com/zellij-org/zellij/pull/5869)
